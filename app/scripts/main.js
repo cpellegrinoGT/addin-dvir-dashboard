@@ -231,8 +231,9 @@ geotab.addin.dvirDashboard = function () {
 
     var totalChunks = chunks.length;
     var completedChunks = 0;
-    var allLogs = [];
+    var allLogIds = [];
 
+    // Phase 1: Fetch DVIRLog list to get IDs (dvirDefects not populated in list queries)
     return chunks.reduce(function (chain, chunk, chunkIdx) {
       return chain.then(function () {
         if (isAborted()) return;
@@ -244,25 +245,55 @@ geotab.addin.dvirDashboard = function () {
             search: {
               fromDate: chunk.from,
               toDate: chunk.to
-            },
-            propertySelector: {
-              fields: ["id", "dateTime", "device", "driver", "logType", "location",
-                       "defectList", "dvirDefects", "isSafeToOperate", "certifyRemark",
-                       "driverRemark", "authorityName", "authorityAddress", "odometer",
-                       "isInspectedByDriver", "duration", "engineHours", "version",
-                       "certifiedBy", "certifyDate", "repairDate", "repairedBy",
-                       "repairRemark", "trailer"],
-              isIncluded: true
             }
           }).then(function (logs) {
-            allLogs = allLogs.concat(logs || []);
+            (logs || []).forEach(function (l) {
+              allLogIds.push(l.id);
+            });
             completedChunks++;
-            if (onProgress) onProgress(completedChunks / totalChunks * 100);
+            if (onProgress) onProgress((completedChunks / totalChunks) * 50);
           });
         });
       });
     }, Promise.resolve()).then(function () {
-      return allLogs;
+      if (isAborted()) return [];
+      console.log("DVIR Dashboard: found", allLogIds.length, "DVIRLog IDs, now fetching full details...");
+
+      // Phase 2: Re-fetch each DVIRLog by ID to get dvirDefects populated
+      // Batch in multiCall groups of 25
+      var BATCH = 25;
+      var batches = [];
+      for (var i = 0; i < allLogIds.length; i += BATCH) {
+        batches.push(allLogIds.slice(i, i + BATCH));
+      }
+
+      var totalBatches = batches.length;
+      var completedBatches = 0;
+      var fullLogs = [];
+
+      return batches.reduce(function (chain, batch, batchIdx) {
+        return chain.then(function () {
+          if (isAborted()) return;
+          var pause = batchIdx > 0 ? delay(300) : Promise.resolve();
+          return pause.then(function () {
+            if (isAborted()) return;
+            var calls = batch.map(function (logId) {
+              return ["Get", { typeName: "DVIRLog", search: { id: logId } }];
+            });
+            return apiMultiCall(calls).then(function (results) {
+              results.forEach(function (arr) {
+                if (Array.isArray(arr) && arr.length > 0) {
+                  fullLogs.push(arr[0]);
+                }
+              });
+              completedBatches++;
+              if (onProgress) onProgress(50 + (completedBatches / totalBatches) * 50);
+            });
+          });
+        });
+      }, Promise.resolve()).then(function () {
+        return fullLogs;
+      });
     });
   }
 
