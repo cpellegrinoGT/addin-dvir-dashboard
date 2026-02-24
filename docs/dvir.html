@@ -7,15 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>DVIR Dashboard</title>
-  <script>
-    (function () {
-      var t = Date.now();
-      var link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = "styles/main.css?t=" + t;
-      document.head.appendChild(link);
-    })();
-  </script>
+  <link rel="stylesheet" href="styles/main.css" />
 </head>
 <body>
   <div id="dvir-root">
@@ -165,12 +157,6 @@
     </div>
   </div>
 
-  <script>
-    (function () {
-      var s = document.createElement("script");
-      s.src = "scripts/main.js?t=" + Date.now();
-      document.body.appendChild(s);
-    })();
-  </script>
+  <script src="scripts/main.js"></script>
 </body>
 </html>
