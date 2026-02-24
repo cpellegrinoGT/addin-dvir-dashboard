@@ -231,9 +231,8 @@ geotab.addin.dvirDashboard = function () {
 
     var totalChunks = chunks.length;
     var completedChunks = 0;
-    var allLogIds = [];
+    var allLogs = [];
 
-    // Phase 1: Fetch DVIRLog list to get IDs (dvirDefects not populated in list queries)
     return chunks.reduce(function (chain, chunk, chunkIdx) {
       return chain.then(function () {
         if (isAborted()) return;
@@ -247,53 +246,14 @@ geotab.addin.dvirDashboard = function () {
               toDate: chunk.to
             }
           }).then(function (logs) {
-            (logs || []).forEach(function (l) {
-              allLogIds.push(l.id);
-            });
+            allLogs = allLogs.concat(logs || []);
             completedChunks++;
-            if (onProgress) onProgress((completedChunks / totalChunks) * 50);
+            if (onProgress) onProgress(completedChunks / totalChunks * 100);
           });
         });
       });
     }, Promise.resolve()).then(function () {
-      if (isAborted()) return [];
-      console.log("DVIR Dashboard: found", allLogIds.length, "DVIRLog IDs, now fetching full details...");
-
-      // Phase 2: Re-fetch each DVIRLog by ID to get dvirDefects populated
-      // Batch in multiCall groups of 25
-      var BATCH = 25;
-      var batches = [];
-      for (var i = 0; i < allLogIds.length; i += BATCH) {
-        batches.push(allLogIds.slice(i, i + BATCH));
-      }
-
-      var totalBatches = batches.length;
-      var completedBatches = 0;
-      var fullLogs = [];
-
-      return batches.reduce(function (chain, batch, batchIdx) {
-        return chain.then(function () {
-          if (isAborted()) return;
-          var pause = batchIdx > 0 ? delay(300) : Promise.resolve();
-          return pause.then(function () {
-            if (isAborted()) return;
-            var calls = batch.map(function (logId) {
-              return ["Get", { typeName: "DVIRLog", search: { id: logId } }];
-            });
-            return apiMultiCall(calls).then(function (results) {
-              results.forEach(function (arr) {
-                if (Array.isArray(arr) && arr.length > 0) {
-                  fullLogs.push(arr[0]);
-                }
-              });
-              completedBatches++;
-              if (onProgress) onProgress(50 + (completedBatches / totalBatches) * 50);
-            });
-          });
-        });
-      }, Promise.resolve()).then(function () {
-        return fullLogs;
-      });
+      return allLogs;
     });
   }
 
@@ -408,10 +368,10 @@ geotab.addin.dvirDashboard = function () {
     var deviceIds = filteredDeviceIds();
 
     return logs.filter(function (log) {
-      // Filter to selected devices and only logs with defects
+      // Filter to selected devices
       var did = log.device ? log.device.id : null;
       if (did && !deviceIds[did]) return false;
-      return hasDefects(log);
+      return true;
     }).map(function (log) {
       var defects = getDefects(log);
       var outstanding = 0, notNecessary = 0, repaired = 0;
@@ -569,7 +529,7 @@ geotab.addin.dvirDashboard = function () {
     });
 
     if (rows.length === 0) {
-      els.fleetBody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;padding:20px;">No DVIRs with defects found.</td></tr>';
+      els.fleetBody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;padding:20px;">No DVIRs found.</td></tr>';
     }
   }
 
@@ -719,39 +679,7 @@ geotab.addin.dvirDashboard = function () {
       if (isAborted()) return;
 
       dvirData.logs = logs;
-      console.log("DVIR Dashboard: total logs fetched:", logs.length);
-      if (logs.length > 0) {
-        console.log("DVIR Dashboard: sample log keys:", Object.keys(logs[0]));
-      }
-      var withDefects = 0;
-      var withoutDefects = 0;
-      logs.forEach(function (l) {
-        if (l.dvirDefects && Array.isArray(l.dvirDefects) && l.dvirDefects.length > 0) {
-          withDefects++;
-        } else {
-          withoutDefects++;
-        }
-      });
-      console.log("DVIR Dashboard: logs WITH dvirDefects:", withDefects, "| logs WITHOUT:", withoutDefects);
-      if (withDefects > 0) {
-        var sample = logs.find(function (l) { return l.dvirDefects && l.dvirDefects.length > 0; });
-        console.log("DVIR Dashboard: sample defect log:", JSON.stringify(sample, null, 2).substring(0, 3000));
-      }
-      // Diagnostic: fetch first log by ID to check if individual Get includes dvirDefects
-      if (logs.length > 0 && withDefects === 0) {
-        console.log("DVIR Dashboard: testing individual fetch by ID...");
-        apiCall("Get", {
-          typeName: "DVIRLog",
-          search: { id: logs[0].id }
-        }).then(function (result) {
-          var single = Array.isArray(result) ? result[0] : result;
-          if (single) {
-            console.log("DVIR Dashboard: individual fetch keys:", Object.keys(single));
-            console.log("DVIR Dashboard: individual fetch dvirDefects:", JSON.stringify(single.dvirDefects));
-            console.log("DVIR Dashboard: individual fetch full:", JSON.stringify(single, null, 2).substring(0, 3000));
-          }
-        }).catch(function (e) { console.error("DVIR Dashboard: individual fetch error:", e); });
-      }
+      console.log("DVIR Dashboard:", logs.length, "DVIRLogs fetched");
       els.loadingText.textContent = "Fetching driver info...";
       setProgress(85);
 
@@ -790,7 +718,7 @@ geotab.addin.dvirDashboard = function () {
       // Update progress text
       var totalLogs = dvirData.fleetRows.length;
       var totalDefects = dvirData.defectRows.length;
-      els.progress.textContent = totalLogs + " DVIRs with defects, " + totalDefects + " total defects";
+      els.progress.textContent = totalLogs + " DVIRs" + (totalDefects > 0 ? ", " + totalDefects + " defects" : "");
 
       // Render active tab
       renderActiveTab();
@@ -798,7 +726,7 @@ geotab.addin.dvirDashboard = function () {
 
       if (totalLogs === 0) {
         showEmpty(true);
-        els.empty.textContent = "No DVIRs with defects found for the selected filters.";
+        els.empty.textContent = "No DVIRs found for the selected filters.";
       }
     }).catch(function (err) {
       if (!isAborted()) {
