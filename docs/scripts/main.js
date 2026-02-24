@@ -300,7 +300,9 @@ geotab.addin.dvirDashboard = function () {
   // ── DVIR Classification ────────────────────────────────────────────────
 
   function getDefects(log) {
-    return log.defectList || log.dvirDefects || [];
+    var list = log.defectList || log.dvirDefects || log.defects || [];
+    if (!Array.isArray(list)) return [];
+    return list;
   }
 
   function getRepairStatus(defect) {
@@ -670,6 +672,10 @@ geotab.addin.dvirDashboard = function () {
       if (isAborted()) return;
 
       dvirData.logs = logs;
+      if (logs.length > 0) {
+        console.log("DVIR Dashboard: sample DVIRLog keys:", Object.keys(logs[0]));
+        console.log("DVIR Dashboard: sample DVIRLog:", JSON.stringify(logs[0], null, 2).substring(0, 2000));
+      }
       els.loadingText.textContent = "Fetching driver info...";
       setProgress(85);
 
