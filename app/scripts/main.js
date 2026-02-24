@@ -269,9 +269,8 @@ geotab.addin.dvirDashboard = function () {
   function enrichDVIRLogs(stubs, onProgress) {
     if (stubs.length === 0) return Promise.resolve([]);
 
-    // Build multiCall batches — keep batch size moderate to avoid API limits
+    // Build multiCall batches — sequential to respect 5000 calls/min API limit
     var BATCH = 50;
-    var PARALLEL = 2;
     var calls = stubs.map(function (log) {
       return ["Get", { typeName: "DVIRLog", search: { id: log.id } }];
     });
@@ -283,10 +282,10 @@ geotab.addin.dvirDashboard = function () {
     var totalBatches = batches.length;
     var completedBatches = 0;
     var fullLogs = [];
-    var batchIdx = 0;
     var errors = 0;
 
-    function processBatch(batch) {
+    function processBatch(batch, retries) {
+      if (retries === undefined) retries = 2;
       return apiMultiCall(batch).then(function (results) {
         results.forEach(function (arr) {
           if (Array.isArray(arr) && arr.length > 0) {
@@ -294,30 +293,34 @@ geotab.addin.dvirDashboard = function () {
           }
         });
       }).catch(function (err) {
+        // Retry on rate limit with backoff
+        if (err && err.isOverLimitException && retries > 0) {
+          var waitSec = (err.rateLimit && err.rateLimit.retryAfter) || 5;
+          console.warn("DVIR Dashboard: rate limited, waiting", waitSec, "s before retry");
+          return delay(waitSec * 1000 + 500).then(function () {
+            return processBatch(batch, retries - 1);
+          });
+        }
         errors++;
-        console.warn("DVIR Dashboard: batch failed, skipping:", err);
+        console.warn("DVIR Dashboard: batch failed, skipping:", err && err.message || err);
       }).then(function () {
         completedBatches++;
         if (onProgress) onProgress(completedBatches / totalBatches * 100);
       });
     }
 
-    // Process batches in parallel rounds
-    function nextRound() {
-      if (isAborted() || batchIdx >= totalBatches) return Promise.resolve();
-
-      var round = [];
-      for (var p = 0; p < PARALLEL && batchIdx < totalBatches; p++, batchIdx++) {
-        round.push(processBatch(batches[batchIdx]));
-      }
-
-      return Promise.all(round).then(function () {
-        if (isAborted() || batchIdx >= totalBatches) return;
-        return delay(200).then(nextRound);
+    // Process batches sequentially with delay between each
+    return batches.reduce(function (chain, batch, idx) {
+      return chain.then(function () {
+        if (isAborted()) return;
+        // Pace requests: ~50 calls per batch, delay 1s between = ~3000 calls/min (under 5000 limit)
+        var pause = idx > 0 ? delay(1000) : Promise.resolve();
+        return pause.then(function () {
+          if (isAborted()) return;
+          return processBatch(batch);
+        });
       });
-    }
-
-    return nextRound().then(function () {
+    }, Promise.resolve()).then(function () {
       if (errors > 0) {
         console.warn("DVIR Dashboard:", errors, "of", totalBatches, "batches failed");
       }
