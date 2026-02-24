@@ -214,7 +214,7 @@ geotab.addin.dvirDashboard = function () {
 
   // ── DVIR Data Fetch ────────────────────────────────────────────────────
 
-  function fetchDVIRLogs(dateRange, onProgress) {
+  function fetchDVIRStubs(dateRange, onProgress) {
     var CHUNK_DAYS = 7;
     var fromMs = new Date(dateRange.from).getTime();
     var toMs = new Date(dateRange.to).getTime();
@@ -233,11 +233,10 @@ geotab.addin.dvirDashboard = function () {
     var completedChunks = 0;
     var allLogStubs = [];
 
-    // Phase 1: Fetch all DVIRLog stubs (no dvirDefects in list queries)
     return chunks.reduce(function (chain, chunk, chunkIdx) {
       return chain.then(function () {
         if (isAborted()) return;
-        var pause = chunkIdx > 0 ? delay(300) : Promise.resolve();
+        var pause = chunkIdx > 0 ? delay(100) : Promise.resolve();
         return pause.then(function () {
           if (isAborted()) return;
           return apiCall("Get", {
@@ -249,49 +248,61 @@ geotab.addin.dvirDashboard = function () {
           }).then(function (logs) {
             allLogStubs = allLogStubs.concat(logs || []);
             completedChunks++;
-            if (onProgress) onProgress((completedChunks / totalChunks) * 50);
+            if (onProgress) onProgress(completedChunks / totalChunks * 100);
           });
         });
       });
     }, Promise.resolve()).then(function () {
-      if (isAborted()) return [];
-      if (allLogStubs.length === 0) return [];
+      return allLogStubs;
+    });
+  }
 
-      // Phase 2: Re-fetch each DVIRLog by ID to get dvirDefects populated
-      // Batch into multiCall groups of 50
-      var BATCH = 50;
-      var calls = allLogStubs.map(function (log) {
-        return ["Get", { typeName: "DVIRLog", search: { id: log.id } }];
+  function enrichDVIRLogs(stubs, onProgress) {
+    if (stubs.length === 0) return Promise.resolve([]);
+
+    // Build multiCall batches of 100
+    var BATCH = 100;
+    var PARALLEL = 3;
+    var calls = stubs.map(function (log) {
+      return ["Get", { typeName: "DVIRLog", search: { id: log.id } }];
+    });
+    var batches = [];
+    for (var i = 0; i < calls.length; i += BATCH) {
+      batches.push(calls.slice(i, i + BATCH));
+    }
+
+    var totalBatches = batches.length;
+    var completedBatches = 0;
+    var fullLogs = [];
+    var batchIdx = 0;
+
+    function processBatchResult(results) {
+      results.forEach(function (arr) {
+        if (Array.isArray(arr) && arr.length > 0) {
+          fullLogs.push(arr[0]);
+        }
       });
-      var batches = [];
-      for (var i = 0; i < calls.length; i += BATCH) {
-        batches.push(calls.slice(i, i + BATCH));
+      completedBatches++;
+      if (onProgress) onProgress(completedBatches / totalBatches * 100);
+    }
+
+    // Process batches in parallel rounds of PARALLEL
+    function nextRound() {
+      if (isAborted() || batchIdx >= totalBatches) return Promise.resolve();
+
+      var round = [];
+      for (var p = 0; p < PARALLEL && batchIdx < totalBatches; p++, batchIdx++) {
+        round.push(apiMultiCall(batches[batchIdx]).then(processBatchResult));
       }
 
-      var completedBatches = 0;
-      var totalBatches = batches.length;
-      var fullLogs = [];
-
-      return batches.reduce(function (chain, batch, batchIdx) {
-        return chain.then(function () {
-          if (isAborted()) return;
-          var pause = batchIdx > 0 ? delay(300) : Promise.resolve();
-          return pause.then(function () {
-            if (isAborted()) return;
-            return apiMultiCall(batch).then(function (results) {
-              results.forEach(function (arr) {
-                if (Array.isArray(arr) && arr.length > 0) {
-                  fullLogs.push(arr[0]);
-                }
-              });
-              completedBatches++;
-              if (onProgress) onProgress(50 + (completedBatches / totalBatches) * 50);
-            });
-          });
-        });
-      }, Promise.resolve()).then(function () {
-        return fullLogs;
+      return Promise.all(round).then(function () {
+        if (isAborted() || batchIdx >= totalBatches) return;
+        return delay(100).then(nextRound);
       });
+    }
+
+    return nextRound().then(function () {
+      return fullLogs;
     });
   }
 
@@ -731,7 +742,7 @@ geotab.addin.dvirDashboard = function () {
     if (abortController) abortController.abort();
     abortController = new AbortController();
 
-    showLoading(true, "Fetching DVIR data...");
+    showLoading(true, "Fetching DVIR inspections...");
     showEmpty(false);
     showWarning(null);
     setProgress(0);
@@ -740,65 +751,78 @@ geotab.addin.dvirDashboard = function () {
 
     els.progress.textContent = "Loading...";
 
-    fetchDVIRLogs(dateRange, function (pct) {
-      setProgress(pct * 0.8);
-      els.loadingText.textContent = "Fetching DVIR data... " + Math.round(pct) + "%";
-    }).then(function (logs) {
+    // Phase 1: Fetch stubs (fast — no defect data yet)
+    fetchDVIRStubs(dateRange, function (pct) {
+      setProgress(pct * 0.3);
+      els.loadingText.textContent = "Fetching inspections... " + Math.round(pct) + "%";
+    }).then(function (stubs) {
       if (isAborted()) return;
 
-      dvirData.logs = logs;
+      console.log("DVIR Dashboard: Phase 1 complete —", stubs.length, "DVIRLogs");
 
-      var logsWithDefects = logs.filter(function (l) { return getDefects(l).length > 0; });
-      console.log("DVIR Dashboard:", logs.length, "DVIRLogs,", logsWithDefects.length, "with defects");
-
-      els.loadingText.textContent = "Fetching driver info...";
-      setProgress(85);
-
-      // Collect driver IDs for lookup
+      // Collect driver IDs from stubs for early name resolution
       var driverIds = [];
-      logs.forEach(function (log) {
+      stubs.forEach(function (log) {
         if (log.driver && log.driver.id && log.driver.id !== "UnknownDriverId") {
           driverIds.push(log.driver.id);
         }
-        // Also collect repairUser IDs from defects
-        var defects = getDefects(log);
-        defects.forEach(function (defect) {
-          if (defect.repairUser && typeof defect.repairUser === "object" && defect.repairUser.id) {
-            driverIds.push(defect.repairUser.id);
-          }
+      });
+
+      // Show stub data immediately while Phase 2 runs
+      els.loadingText.textContent = "Resolving drivers...";
+      return fetchDrivers(driverIds).then(function () {
+        if (isAborted()) return;
+
+        // Render fleet table from stubs (defect counts will be 0)
+        dvirData.logs = stubs;
+        dvirData.fleetRows = buildFleetRows(stubs);
+        dvirData.defectRows = [];
+        renderKpis();
+        renderActiveTab();
+        showLoading(false);
+        els.progress.textContent = stubs.length + " DVIRs — loading defect details...";
+
+        if (stubs.length === 0) {
+          showEmpty(true);
+          els.empty.textContent = "No DVIRs found for the selected filters.";
+          return;
+        }
+
+        // Phase 2: Enrich with defect data (parallel batches of 100)
+        return enrichDVIRLogs(stubs, function (pct) {
+          els.progress.textContent = stubs.length + " DVIRs — defects " + Math.round(pct) + "%";
+        }).then(function (fullLogs) {
+          if (isAborted()) return;
+
+          dvirData.logs = fullLogs;
+
+          var logsWithDefects = fullLogs.filter(function (l) { return getDefects(l).length > 0; });
+          console.log("DVIR Dashboard: Phase 2 complete —", logsWithDefects.length, "with defects");
+
+          // Collect repairUser IDs from defect data
+          var repairUserIds = [];
+          fullLogs.forEach(function (log) {
+            getDefects(log).forEach(function (defect) {
+              if (defect.repairUser && typeof defect.repairUser === "object" && defect.repairUser.id) {
+                repairUserIds.push(defect.repairUser.id);
+              }
+            });
+          });
+
+          return fetchDrivers(repairUserIds).then(function () {
+            if (isAborted()) return;
+
+            // Rebuild with full defect data
+            dvirData.fleetRows = buildFleetRows(fullLogs);
+            dvirData.defectRows = buildDefectRows(fullLogs);
+            renderKpis();
+            renderActiveTab();
+
+            var totalDefects = dvirData.defectRows.length;
+            els.progress.textContent = dvirData.fleetRows.length + " DVIRs, " + totalDefects + " defects";
+          });
         });
       });
-
-      return fetchDrivers(driverIds).then(function () {
-        return logs;
-      });
-    }).then(function (logs) {
-      if (isAborted()) return;
-      if (!logs) return;
-
-      els.loadingText.textContent = "Processing data...";
-      setProgress(95);
-
-      // Build rows
-      dvirData.fleetRows = buildFleetRows(logs);
-      dvirData.defectRows = buildDefectRows(logs);
-
-      // Update KPIs
-      renderKpis();
-
-      // Update progress text
-      var totalLogs = dvirData.fleetRows.length;
-      var totalDefects = dvirData.defectRows.length;
-      els.progress.textContent = totalLogs + " DVIRs" + (totalDefects > 0 ? ", " + totalDefects + " defects" : "");
-
-      // Render active tab
-      renderActiveTab();
-      showLoading(false);
-
-      if (totalLogs === 0) {
-        showEmpty(true);
-        els.empty.textContent = "No DVIRs found for the selected filters.";
-      }
     }).catch(function (err) {
       if (!isAborted()) {
         console.error("DVIR Dashboard error:", err);
