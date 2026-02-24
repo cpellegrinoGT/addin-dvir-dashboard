@@ -1,0 +1,431 @@
+/* All styles scoped under #dvir-root to avoid leaking into MyGeotab */
+
+#dvir-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  color: #333;
+}
+
+/* Toolbar */
+
+#dvir-root #dvir-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #f5f6f8;
+  border-bottom: 1px solid #ddd;
+  z-index: 1000;
+}
+
+#dvir-root .dvir-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#dvir-root .dvir-control-group > label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #666;
+  letter-spacing: 0.3px;
+}
+
+#dvir-root select,
+#dvir-root input[type="text"] {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #fff;
+}
+
+#dvir-root select:focus,
+#dvir-root input[type="text"]:focus {
+  outline: none;
+  border-color: #4a90d9;
+  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+}
+
+/* Preset button group */
+
+#dvir-root .dvir-presets {
+  display: flex;
+}
+
+#dvir-root .dvir-preset {
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  color: #333;
+  transition: background 0.15s, color 0.15s;
+}
+
+#dvir-root .dvir-preset:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+#dvir-root .dvir-preset:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+#dvir-root .dvir-preset:not(:first-child) {
+  border-left: none;
+}
+
+#dvir-root .dvir-preset:hover {
+  background: #e8ecf0;
+}
+
+#dvir-root .dvir-preset.active {
+  background: #4a90d9;
+  color: #fff;
+  border-color: #4a90d9;
+}
+
+#dvir-root .dvir-preset.active + .dvir-preset {
+  border-left-color: #4a90d9;
+}
+
+/* Apply button */
+
+#dvir-root #dvir-apply {
+  padding: 6px 20px;
+  background: #4a90d9;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#dvir-root #dvir-apply:hover {
+  background: #3a7bc8;
+}
+
+#dvir-root #dvir-apply:active {
+  background: #2e66a8;
+}
+
+/* Progress text */
+
+#dvir-root #dvir-progress {
+  font-size: 13px;
+  color: #555;
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* Tab Bar */
+
+#dvir-root #dvir-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 14px;
+  background: #fff;
+  border-bottom: 2px solid #ddd;
+}
+
+#dvir-root .dvir-tab {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+#dvir-root .dvir-tab:hover {
+  color: #333;
+}
+
+#dvir-root .dvir-tab.active {
+  color: #4a90d9;
+  border-bottom-color: #4a90d9;
+}
+
+/* KPI Strip */
+
+#dvir-root #dvir-kpi-strip {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+}
+
+#dvir-root .dvir-kpi-card {
+  flex: 1;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  text-align: center;
+}
+
+#dvir-root .dvir-kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #666;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+#dvir-root .dvir-kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+}
+
+/* Content Area */
+
+#dvir-root #dvir-content {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: auto;
+}
+
+#dvir-root .dvir-panel {
+  display: none;
+  padding: 14px;
+}
+
+#dvir-root .dvir-panel.active {
+  display: block;
+}
+
+/* Panel toolbar */
+
+#dvir-root .dvir-panel-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+#dvir-root .dvir-panel-toolbar input[type="text"] {
+  min-width: 220px;
+}
+
+/* Export button */
+
+#dvir-root .dvir-export-btn {
+  padding: 6px 16px;
+  background: #fff;
+  color: #4a90d9;
+  border: 1px solid #4a90d9;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+#dvir-root .dvir-export-btn:hover {
+  background: #4a90d9;
+  color: #fff;
+}
+
+/* Tables */
+
+#dvir-root .dvir-table-wrapper {
+  overflow: auto;
+  max-height: calc(100vh - 240px);
+}
+
+#dvir-root .dvir-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+#dvir-root .dvir-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+#dvir-root .dvir-table th {
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #666;
+  background: #f5f6f8;
+  border-bottom: 2px solid #ddd;
+  white-space: nowrap;
+  user-select: none;
+}
+
+#dvir-root .dvir-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #eee;
+  color: #333;
+}
+
+#dvir-root .dvir-table tbody tr:hover {
+  background: #f0f5ff;
+}
+
+/* Sortable columns */
+
+#dvir-root .dvir-sortable {
+  cursor: pointer;
+}
+
+#dvir-root .dvir-sortable:hover {
+  color: #4a90d9;
+}
+
+#dvir-root .dvir-sort-arrow {
+  font-size: 10px;
+  margin-left: 2px;
+}
+
+#dvir-root .dvir-sort-arrow::after {
+  content: "";
+}
+
+#dvir-root .dvir-sortable.dvir-sort-asc .dvir-sort-arrow::after {
+  content: "\25B2";
+}
+
+#dvir-root .dvir-sortable.dvir-sort-desc .dvir-sort-arrow::after {
+  content: "\25BC";
+}
+
+/* Repair Status Badges */
+
+#dvir-root .dvir-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+#dvir-root .dvir-badge-outstanding {
+  background: #fde8e8;
+  color: #e74c3c;
+}
+
+#dvir-root .dvir-badge-not-necessary {
+  background: #fff3cd;
+  color: #856404;
+}
+
+#dvir-root .dvir-badge-repaired {
+  background: #d4edda;
+  color: #27ae60;
+}
+
+/* Safe to Operate badges */
+
+#dvir-root .dvir-badge-safe {
+  color: #27ae60;
+  font-weight: 600;
+}
+
+#dvir-root .dvir-badge-unsafe {
+  color: #e74c3c;
+  font-weight: 600;
+}
+
+/* Outstanding defect count highlight */
+
+#dvir-root .dvir-outstanding-count {
+  color: #e74c3c;
+  font-weight: 600;
+}
+
+/* Loading overlay */
+
+#dvir-root #dvir-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 900;
+  gap: 12px;
+  font-size: 14px;
+  color: #555;
+}
+
+#dvir-root .dvir-spinner {
+  width: 36px;
+  height: 36px;
+  border: 4px solid #ddd;
+  border-top-color: #4a90d9;
+  border-radius: 50%;
+  animation: dvir-spin 0.8s linear infinite;
+}
+
+@keyframes dvir-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Progress bar */
+
+#dvir-root .dvir-progress-bar-wrap {
+  width: 200px;
+  height: 6px;
+  background: #ddd;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+#dvir-root .dvir-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: #4a90d9;
+  border-radius: 3px;
+  transition: width 0.2s;
+}
+
+/* Empty state */
+
+#dvir-root #dvir-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #888;
+  background: rgba(255, 255, 255, 0.85);
+  z-index: 800;
+}
+
+/* Warning banner */
+
+#dvir-root #dvir-warning {
+  padding: 8px 14px;
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  margin: 8px 14px 0;
+  font-size: 13px;
+}

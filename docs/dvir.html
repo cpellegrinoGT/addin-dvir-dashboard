@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DVIR Dashboard</title>
+  <link rel="stylesheet" href="styles/main.css" />
+</head>
+<body>
+  <div id="dvir-root">
+    <!-- Filter Toolbar -->
+    <div id="dvir-toolbar">
+      <div class="dvir-control-group">
+        <label>Timeframe</label>
+        <div class="dvir-presets">
+          <button class="dvir-preset" data-preset="yesterday">Yesterday</button>
+          <button class="dvir-preset active" data-preset="7days">Last 7 Days</button>
+          <button class="dvir-preset" data-preset="30days">Last 30 Days</button>
+          <button class="dvir-preset" data-preset="alltime">All Time</button>
+        </div>
+      </div>
+
+      <div class="dvir-control-group">
+        <label for="dvir-group">Group</label>
+        <select id="dvir-group">
+          <option value="all">All Groups</option>
+        </select>
+      </div>
+
+      <div class="dvir-control-group">
+        <label for="dvir-vehicle">Vehicle</label>
+        <select id="dvir-vehicle">
+          <option value="all">All Vehicles</option>
+        </select>
+      </div>
+
+      <div class="dvir-control-group">
+        <button id="dvir-apply">Apply</button>
+      </div>
+
+      <div class="dvir-control-group">
+        <span id="dvir-progress"></span>
+      </div>
+    </div>
+
+    <!-- Tab Bar -->
+    <div id="dvir-tabs">
+      <button class="dvir-tab active" data-tab="fleet">Fleet Summary</button>
+      <button class="dvir-tab" data-tab="defects">Defect Detail</button>
+    </div>
+
+    <!-- KPI Strip (fleet tab only) -->
+    <div id="dvir-kpi-strip">
+      <div class="dvir-kpi-card">
+        <div class="dvir-kpi-label">Total Outstanding DVIRs</div>
+        <div class="dvir-kpi-value" id="dvir-kpi-outstanding">--</div>
+      </div>
+      <div class="dvir-kpi-card">
+        <div class="dvir-kpi-label">Total "Not Necessary" DVIRs</div>
+        <div class="dvir-kpi-value" id="dvir-kpi-not-necessary">--</div>
+      </div>
+    </div>
+
+    <!-- Content Panels -->
+    <div id="dvir-content">
+      <!-- Fleet Summary Panel -->
+      <div class="dvir-panel active" id="dvir-panel-fleet">
+        <div class="dvir-panel-toolbar">
+          <div class="dvir-control-group">
+            <label for="dvir-fleet-search">Search</label>
+            <input type="text" id="dvir-fleet-search" placeholder="Search vehicles or drivers..." />
+          </div>
+          <div class="dvir-control-group">
+            <button class="dvir-export-btn" id="dvir-fleet-export">Export CSV</button>
+          </div>
+        </div>
+        <div class="dvir-table-wrapper">
+          <table class="dvir-table" id="dvir-fleet-table">
+            <thead>
+              <tr>
+                <th data-col="vehicle" class="dvir-sortable">Vehicle/Trailer <span class="dvir-sort-arrow"></span></th>
+                <th data-col="driver" class="dvir-sortable">Driver <span class="dvir-sort-arrow"></span></th>
+                <th data-col="date" class="dvir-sortable">Date <span class="dvir-sort-arrow"></span></th>
+                <th data-col="logType" class="dvir-sortable">Log Type <span class="dvir-sort-arrow"></span></th>
+                <th data-col="safeToOperate" class="dvir-sortable">Safe to Operate <span class="dvir-sort-arrow"></span></th>
+                <th data-col="totalDefects" class="dvir-sortable">Total Defects <span class="dvir-sort-arrow"></span></th>
+                <th data-col="outstandingDefects" class="dvir-sortable">Outstanding <span class="dvir-sort-arrow"></span></th>
+                <th data-col="notNecessary" class="dvir-sortable">Not Necessary <span class="dvir-sort-arrow"></span></th>
+                <th data-col="repaired" class="dvir-sortable">Repaired <span class="dvir-sort-arrow"></span></th>
+              </tr>
+            </thead>
+            <tbody id="dvir-fleet-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Defect Detail Panel -->
+      <div class="dvir-panel" id="dvir-panel-defects">
+        <div class="dvir-panel-toolbar">
+          <div class="dvir-control-group">
+            <label for="dvir-defect-filter">Repair Status</label>
+            <select id="dvir-defect-filter">
+              <option value="outstanding">Outstanding Only</option>
+              <option value="all">All Defects</option>
+              <option value="notNecessary">Not Necessary Only</option>
+              <option value="repaired">Repaired Only</option>
+            </select>
+          </div>
+          <div class="dvir-control-group">
+            <label for="dvir-defect-search">Search</label>
+            <input type="text" id="dvir-defect-search" placeholder="Search defects..." />
+          </div>
+          <div class="dvir-control-group">
+            <button class="dvir-export-btn" id="dvir-defect-export">Export CSV</button>
+          </div>
+        </div>
+        <div class="dvir-table-wrapper">
+          <table class="dvir-table" id="dvir-defect-table">
+            <thead>
+              <tr>
+                <th data-col="vehicle" class="dvir-sortable">Vehicle/Trailer <span class="dvir-sort-arrow"></span></th>
+                <th data-col="driver" class="dvir-sortable">Driver <span class="dvir-sort-arrow"></span></th>
+                <th data-col="date" class="dvir-sortable">Date <span class="dvir-sort-arrow"></span></th>
+                <th data-col="part" class="dvir-sortable">Part <span class="dvir-sort-arrow"></span></th>
+                <th data-col="defect" class="dvir-sortable">Defect <span class="dvir-sort-arrow"></span></th>
+                <th data-col="severity" class="dvir-sortable">Severity <span class="dvir-sort-arrow"></span></th>
+                <th data-col="repairStatus" class="dvir-sortable">Repair Status <span class="dvir-sort-arrow"></span></th>
+                <th data-col="repairedBy" class="dvir-sortable">Repaired By <span class="dvir-sort-arrow"></span></th>
+                <th data-col="repairDate" class="dvir-sortable">Repair Date <span class="dvir-sort-arrow"></span></th>
+                <th data-col="remarks">Remarks</th>
+              </tr>
+            </thead>
+            <tbody id="dvir-defect-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Loading Overlay -->
+      <div id="dvir-loading" style="display:none;">
+        <div class="dvir-spinner"></div>
+        <span id="dvir-loading-text">Loading data&hellip;</span>
+        <div class="dvir-progress-bar-wrap">
+          <div class="dvir-progress-bar" id="dvir-progress-bar"></div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div id="dvir-empty" style="display:none;">
+        No data found for the selected filters.
+      </div>
+
+      <!-- Warning Banner -->
+      <div id="dvir-warning" style="display:none;"></div>
+    </div>
+  </div>
+
+  <script src="scripts/main.js"></script>
+</body>
+</html>
