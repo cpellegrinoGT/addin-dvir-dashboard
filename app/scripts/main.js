@@ -244,6 +244,15 @@ geotab.addin.dvirDashboard = function () {
             search: {
               fromDate: chunk.from,
               toDate: chunk.to
+            },
+            propertySelector: {
+              fields: ["id", "dateTime", "device", "driver", "logType", "location",
+                       "defectList", "dvirDefects", "isSafeToOperate", "certifyRemark",
+                       "driverRemark", "authorityName", "authorityAddress", "odometer",
+                       "isInspectedByDriver", "duration", "engineHours", "version",
+                       "certifiedBy", "certifyDate", "repairDate", "repairedBy",
+                       "repairRemark", "trailer"],
+              isIncluded: true
             }
           }).then(function (logs) {
             allLogs = allLogs.concat(logs || []);
@@ -680,6 +689,9 @@ geotab.addin.dvirDashboard = function () {
 
       dvirData.logs = logs;
       console.log("DVIR Dashboard: total logs fetched:", logs.length);
+      if (logs.length > 0) {
+        console.log("DVIR Dashboard: sample log keys:", Object.keys(logs[0]));
+      }
       var withDefects = 0;
       var withoutDefects = 0;
       logs.forEach(function (l) {
@@ -693,8 +705,21 @@ geotab.addin.dvirDashboard = function () {
       if (withDefects > 0) {
         var sample = logs.find(function (l) { return l.dvirDefects && l.dvirDefects.length > 0; });
         console.log("DVIR Dashboard: sample defect log:", JSON.stringify(sample, null, 2).substring(0, 3000));
-      } else if (logs.length > 0) {
-        console.log("DVIR Dashboard: no logs have dvirDefects — checking all property names on first log:", Object.keys(logs[0]));
+      }
+      // Diagnostic: fetch first log by ID to check if individual Get includes dvirDefects
+      if (logs.length > 0 && withDefects === 0) {
+        console.log("DVIR Dashboard: testing individual fetch by ID...");
+        apiCall("Get", {
+          typeName: "DVIRLog",
+          search: { id: logs[0].id }
+        }).then(function (result) {
+          var single = Array.isArray(result) ? result[0] : result;
+          if (single) {
+            console.log("DVIR Dashboard: individual fetch keys:", Object.keys(single));
+            console.log("DVIR Dashboard: individual fetch dvirDefects:", JSON.stringify(single.dvirDefects));
+            console.log("DVIR Dashboard: individual fetch full:", JSON.stringify(single, null, 2).substring(0, 3000));
+          }
+        }).catch(function (e) { console.error("DVIR Dashboard: individual fetch error:", e); });
       }
       els.loadingText.textContent = "Fetching driver info...";
       setProgress(85);
