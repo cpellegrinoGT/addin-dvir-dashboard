@@ -269,9 +269,9 @@ geotab.addin.dvirDashboard = function () {
   function enrichDVIRLogs(stubs, onProgress) {
     if (stubs.length === 0) return Promise.resolve([]);
 
-    // Build multiCall batches of 100
-    var BATCH = 100;
-    var PARALLEL = 3;
+    // Build multiCall batches — keep batch size moderate to avoid API limits
+    var BATCH = 50;
+    var PARALLEL = 2;
     var calls = stubs.map(function (log) {
       return ["Get", { typeName: "DVIRLog", search: { id: log.id } }];
     });
@@ -284,33 +284,43 @@ geotab.addin.dvirDashboard = function () {
     var completedBatches = 0;
     var fullLogs = [];
     var batchIdx = 0;
+    var errors = 0;
 
-    function processBatchResult(results) {
-      results.forEach(function (arr) {
-        if (Array.isArray(arr) && arr.length > 0) {
-          fullLogs.push(arr[0]);
-        }
+    function processBatch(batch) {
+      return apiMultiCall(batch).then(function (results) {
+        results.forEach(function (arr) {
+          if (Array.isArray(arr) && arr.length > 0) {
+            fullLogs.push(arr[0]);
+          }
+        });
+      }).catch(function (err) {
+        errors++;
+        console.warn("DVIR Dashboard: batch failed, skipping:", err);
+      }).then(function () {
+        completedBatches++;
+        if (onProgress) onProgress(completedBatches / totalBatches * 100);
       });
-      completedBatches++;
-      if (onProgress) onProgress(completedBatches / totalBatches * 100);
     }
 
-    // Process batches in parallel rounds of PARALLEL
+    // Process batches in parallel rounds
     function nextRound() {
       if (isAborted() || batchIdx >= totalBatches) return Promise.resolve();
 
       var round = [];
       for (var p = 0; p < PARALLEL && batchIdx < totalBatches; p++, batchIdx++) {
-        round.push(apiMultiCall(batches[batchIdx]).then(processBatchResult));
+        round.push(processBatch(batches[batchIdx]));
       }
 
       return Promise.all(round).then(function () {
         if (isAborted() || batchIdx >= totalBatches) return;
-        return delay(100).then(nextRound);
+        return delay(200).then(nextRound);
       });
     }
 
     return nextRound().then(function () {
+      if (errors > 0) {
+        console.warn("DVIR Dashboard:", errors, "of", totalBatches, "batches failed");
+      }
       return fullLogs;
     });
   }
@@ -806,8 +816,14 @@ geotab.addin.dvirDashboard = function () {
       if (!isAborted()) {
         console.error("DVIR Dashboard error:", err);
         showLoading(false);
-        showEmpty(true);
-        els.empty.textContent = "Error loading data. Please try again.";
+        // If we already have stub data displayed, show a warning instead of wiping the table
+        if (dvirData.fleetRows.length > 0) {
+          showWarning("Defect details failed to load. Fleet summary is shown without defect counts.");
+          els.progress.textContent = dvirData.fleetRows.length + " DVIRs (defect loading failed)";
+        } else {
+          showEmpty(true);
+          els.empty.textContent = "Error loading data. Please try again.";
+        }
       }
     });
   }
