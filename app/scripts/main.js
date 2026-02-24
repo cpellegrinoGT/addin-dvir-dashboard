@@ -99,6 +99,10 @@ geotab.addin.dvirDashboard = function () {
         from.setDate(from.getDate() - 365);
         from.setHours(0, 0, 0, 0);
         break;
+      case "custom":
+        from = els.fromDate.value ? new Date(els.fromDate.value + "T00:00:00") : new Date(now.getTime() - 30 * 86400000);
+        to = els.toDate.value ? new Date(els.toDate.value + "T23:59:59") : to;
+        break;
       default:
         from = new Date(now);
         from.setDate(from.getDate() - 7);
@@ -338,6 +342,23 @@ geotab.addin.dvirDashboard = function () {
     return log.logType || log.type || "--";
   }
 
+  function getDeviceGroups(log) {
+    var deviceId = log.device ? log.device.id : null;
+    if (!deviceId || !deviceMap[deviceId]) return "";
+    var dev = deviceMap[deviceId];
+    var devGroups = dev.groups || [];
+    var names = [];
+    for (var i = 0; i < devGroups.length; i++) {
+      var gid = devGroups[i].id;
+      if (gid === "GroupCompanyId" || gid === "GroupNothingId") continue;
+      var g = allGroups[gid];
+      if (g && g.name && g.name !== "CompanyGroup" && g.name !== "**Nothing**") {
+        names.push(g.name);
+      }
+    }
+    return names.join(", ");
+  }
+
   // ── Build Rows ─────────────────────────────────────────────────────────
 
   function buildFleetRows(logs) {
@@ -364,9 +385,12 @@ geotab.addin.dvirDashboard = function () {
         vehicle: getDeviceName(log),
         deviceId: log.device ? log.device.id : null,
         driver: getDriverName(log),
+        groups: getDeviceGroups(log),
         date: log.dateTime || log.logDate,
         logType: getLogType(log),
-        safeToOperate: log.isSafeToOperate !== false,
+        safeToOperate: log.isSafeToOperate === true ? "yes"
+                     : log.isSafeToOperate === false ? "no"
+                     : "unknown",
         totalDefects: defects.length,
         outstandingDefects: outstanding,
         notNecessary: notNecessary,
@@ -438,6 +462,7 @@ geotab.addin.dvirDashboard = function () {
           vehicle: getDeviceName(log),
           deviceId: log.device ? log.device.id : null,
           driver: getDriverName(log),
+          groups: getDeviceGroups(log),
           date: log.dateTime || log.logDate,
           part: part,
           defect: defectName,
@@ -480,22 +505,36 @@ geotab.addin.dvirDashboard = function () {
   function renderFleetTable() {
     var rows = dvirData.fleetRows.slice();
     var searchTerm = els.fleetSearch.value.toLowerCase();
+    var logTypeFilter = els.fleetLogType.value;
+    var safeFilter = els.fleetSafe.value;
 
     if (searchTerm) {
       rows = rows.filter(function (r) {
         return r.vehicle.toLowerCase().indexOf(searchTerm) >= 0 ||
-               r.driver.toLowerCase().indexOf(searchTerm) >= 0;
+               r.driver.toLowerCase().indexOf(searchTerm) >= 0 ||
+               r.groups.toLowerCase().indexOf(searchTerm) >= 0;
       });
+    }
+
+    if (logTypeFilter !== "all") {
+      rows = rows.filter(function (r) { return r.logType === logTypeFilter; });
+    }
+
+    if (safeFilter !== "all") {
+      rows = rows.filter(function (r) { return r.safeToOperate === safeFilter; });
     }
 
     sortRows(rows, sortState.fleet);
     renderTableBody(els.fleetBody, rows, function (r) {
-      var safeClass = r.safeToOperate ? "dvir-badge-safe" : "dvir-badge-unsafe";
-      var safeText = r.safeToOperate ? "Yes" : "No";
+      var safeClass, safeText;
+      if (r.safeToOperate === "yes") { safeClass = "dvir-badge-safe"; safeText = "Yes"; }
+      else if (r.safeToOperate === "no") { safeClass = "dvir-badge-unsafe"; safeText = "No"; }
+      else { safeClass = "dvir-badge-unknown"; safeText = "Unknown"; }
       var outstandingClass = r.outstandingDefects > 0 ? ' class="dvir-outstanding-count"' : '';
 
       return '<td>' + dvirLink(r.id, r.deviceId, r.vehicle) + '</td>' +
         '<td>' + escapeHtml(r.driver) + '</td>' +
+        '<td>' + escapeHtml(r.groups) + '</td>' +
         '<td>' + formatDateTime(r.date) + '</td>' +
         '<td>' + escapeHtml(r.logType) + '</td>' +
         '<td><span class="' + safeClass + '">' + safeText + '</span></td>' +
@@ -506,7 +545,7 @@ geotab.addin.dvirDashboard = function () {
     });
 
     if (rows.length === 0) {
-      els.fleetBody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;padding:20px;">No DVIRs found.</td></tr>';
+      els.fleetBody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#888;padding:20px;">No DVIRs found.</td></tr>';
     }
   }
 
@@ -524,6 +563,7 @@ geotab.addin.dvirDashboard = function () {
       rows = rows.filter(function (r) {
         return r.vehicle.toLowerCase().indexOf(searchTerm) >= 0 ||
                r.driver.toLowerCase().indexOf(searchTerm) >= 0 ||
+               r.groups.toLowerCase().indexOf(searchTerm) >= 0 ||
                r.part.toLowerCase().indexOf(searchTerm) >= 0 ||
                r.defect.toLowerCase().indexOf(searchTerm) >= 0 ||
                r.remarks.toLowerCase().indexOf(searchTerm) >= 0;
@@ -539,6 +579,7 @@ geotab.addin.dvirDashboard = function () {
 
       return '<td>' + dvirLink(r.dvirLogId, r.deviceId, r.vehicle) + '</td>' +
         '<td>' + escapeHtml(r.driver) + '</td>' +
+        '<td>' + escapeHtml(r.groups) + '</td>' +
         '<td>' + formatDateTime(r.date) + '</td>' +
         '<td>' + escapeHtml(r.part) + '</td>' +
         '<td>' + escapeHtml(r.defect) + '</td>' +
@@ -550,7 +591,7 @@ geotab.addin.dvirDashboard = function () {
     });
 
     if (rows.length === 0) {
-      els.defectBody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#888;padding:20px;">No defects found.</td></tr>';
+      els.defectBody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#888;padding:20px;">No defects found.</td></tr>';
     }
   }
 
@@ -695,6 +736,17 @@ geotab.addin.dvirDashboard = function () {
 
     document.querySelectorAll(".dvir-preset").forEach(function (b) { b.classList.remove("active"); });
     btn.classList.add("active");
+
+    var isCustom = btn.dataset.preset === "custom";
+    els.customDates.style.display = isCustom ? "" : "none";
+
+    if (isCustom && !els.fromDate.value) {
+      var now = new Date();
+      var from = new Date(now);
+      from.setDate(from.getDate() - 30);
+      els.fromDate.value = from.toISOString().slice(0, 10);
+      els.toDate.value = now.toISOString().slice(0, 10);
+    }
   }
 
   function onTabClick(e) {
@@ -727,6 +779,9 @@ geotab.addin.dvirDashboard = function () {
       api = freshApi;
 
       // Cache DOM refs
+      els.customDates = $("dvir-custom-dates");
+      els.fromDate = $("dvir-from");
+      els.toDate = $("dvir-to");
       els.group = $("dvir-group");
       els.vehicle = $("dvir-vehicle");
       els.apply = $("dvir-apply");
@@ -739,6 +794,8 @@ geotab.addin.dvirDashboard = function () {
       els.kpiStrip = $("dvir-kpi-strip");
       els.kpiOutstanding = $("dvir-kpi-outstanding");
       els.kpiNotNecessary = $("dvir-kpi-not-necessary");
+      els.fleetLogType = $("dvir-fleet-logtype");
+      els.fleetSafe = $("dvir-fleet-safe");
       els.fleetSearch = $("dvir-fleet-search");
       els.fleetBody = $("dvir-fleet-body");
       els.defectFilter = $("dvir-defect-filter");
@@ -770,17 +827,19 @@ geotab.addin.dvirDashboard = function () {
       });
 
       // Search / filter listeners
+      els.fleetLogType.addEventListener("change", renderFleetTable);
+      els.fleetSafe.addEventListener("change", renderFleetTable);
       els.fleetSearch.addEventListener("input", renderFleetTable);
       els.defectFilter.addEventListener("change", renderDefectsTable);
       els.defectSearch.addEventListener("input", renderDefectsTable);
 
       // CSV export listeners
       $("dvir-fleet-export").addEventListener("click", function () {
-        var headers = ["vehicle", "driver", "date", "logType", "safeToOperate", "totalDefects", "outstandingDefects", "notNecessary", "repaired"];
+        var headers = ["vehicle", "driver", "groups", "date", "logType", "safeToOperate", "totalDefects", "outstandingDefects", "notNecessary", "repaired"];
         exportCsv("dvir_fleet_summary.csv", headers, dvirData.fleetRows);
       });
       $("dvir-defect-export").addEventListener("click", function () {
-        var headers = ["vehicle", "driver", "date", "part", "defect", "severity", "repairStatus", "repairedBy", "repairDate", "remarks"];
+        var headers = ["vehicle", "driver", "groups", "date", "part", "defect", "severity", "repairStatus", "repairedBy", "repairDate", "remarks"];
         exportCsv("dvir_defect_detail.csv", headers, dvirData.defectRows);
       });
 

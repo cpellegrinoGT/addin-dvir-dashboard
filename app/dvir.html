@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>DVIR Dashboard</title>
-  <link rel="stylesheet" href="styles/main.css?v=2" />
+  <link rel="stylesheet" href="styles/main.css?v=3" />
 </head>
 <body>
   <div id="dvir-root">
@@ -20,7 +20,15 @@
           <button class="dvir-preset active" data-preset="7days">Last 7 Days</button>
           <button class="dvir-preset" data-preset="30days">Last 30 Days</button>
           <button class="dvir-preset" data-preset="alltime">All Time</button>
+          <button class="dvir-preset" data-preset="custom">Custom</button>
         </div>
+      </div>
+
+      <div class="dvir-control-group" id="dvir-custom-dates" style="display:none;">
+        <label for="dvir-from">From</label>
+        <input type="date" id="dvir-from" />
+        <label for="dvir-to">To</label>
+        <input type="date" id="dvir-to" />
       </div>
 
       <div class="dvir-control-group">
@@ -70,6 +78,23 @@
       <div class="dvir-panel active" id="dvir-panel-fleet">
         <div class="dvir-panel-toolbar">
           <div class="dvir-control-group">
+            <label for="dvir-fleet-logtype">Log Type</label>
+            <select id="dvir-fleet-logtype">
+              <option value="all">All Types</option>
+              <option value="PreTrip">Pre-Trip</option>
+              <option value="PostTrip">Post-Trip</option>
+            </select>
+          </div>
+          <div class="dvir-control-group">
+            <label for="dvir-fleet-safe">Safe to Operate</label>
+            <select id="dvir-fleet-safe">
+              <option value="all">All</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+              <option value="unknown">Unknown</option>
+            </select>
+          </div>
+          <div class="dvir-control-group">
             <label for="dvir-fleet-search">Search</label>
             <input type="text" id="dvir-fleet-search" placeholder="Search vehicles or drivers..." />
           </div>
@@ -83,6 +108,7 @@
               <tr>
                 <th data-col="vehicle" class="dvir-sortable">Vehicle/Trailer <span class="dvir-sort-arrow"></span></th>
                 <th data-col="driver" class="dvir-sortable">Driver <span class="dvir-sort-arrow"></span></th>
+                <th data-col="groups" class="dvir-sortable">Groups <span class="dvir-sort-arrow"></span></th>
                 <th data-col="date" class="dvir-sortable">Date <span class="dvir-sort-arrow"></span></th>
                 <th data-col="logType" class="dvir-sortable">Log Type <span class="dvir-sort-arrow"></span></th>
                 <th data-col="safeToOperate" class="dvir-sortable">Safe to Operate <span class="dvir-sort-arrow"></span></th>
@@ -123,6 +149,7 @@
               <tr>
                 <th data-col="vehicle" class="dvir-sortable">Vehicle/Trailer <span class="dvir-sort-arrow"></span></th>
                 <th data-col="driver" class="dvir-sortable">Driver <span class="dvir-sort-arrow"></span></th>
+                <th data-col="groups" class="dvir-sortable">Groups <span class="dvir-sort-arrow"></span></th>
                 <th data-col="date" class="dvir-sortable">Date <span class="dvir-sort-arrow"></span></th>
                 <th data-col="part" class="dvir-sortable">Part <span class="dvir-sort-arrow"></span></th>
                 <th data-col="defect" class="dvir-sortable">Defect <span class="dvir-sort-arrow"></span></th>
@@ -157,6 +184,6 @@
     </div>
   </div>
 
-  <script src="scripts/main.js?v=2"></script>
+  <script src="scripts/main.js?v=3"></script>
 </body>
 </html>

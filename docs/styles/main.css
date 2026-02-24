@@ -37,6 +37,7 @@
 }
 
 #dvir-root select,
+#dvir-root input[type="date"],
 #dvir-root input[type="text"] {
   padding: 6px 8px;
   border: 1px solid #ccc;
@@ -46,6 +47,7 @@
 }
 
 #dvir-root select:focus,
+#dvir-root input[type="date"]:focus,
 #dvir-root input[type="text"]:focus {
   outline: none;
   border-color: #4a90d9;
@@ -92,6 +94,21 @@
 
 #dvir-root .dvir-preset.active + .dvir-preset {
   border-left-color: #4a90d9;
+}
+
+/* Custom dates row */
+
+#dvir-root #dvir-custom-dates {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+#dvir-root #dvir-custom-dates label {
+  font-size: 13px;
+  font-weight: normal;
+  text-transform: none;
+  color: #555;
 }
 
 /* Apply button */
@@ -358,6 +375,11 @@
 
 #dvir-root .dvir-badge-unsafe {
   color: #e74c3c;
+  font-weight: 600;
+}
+
+#dvir-root .dvir-badge-unknown {
+  color: #888;
   font-weight: 600;
 }
 
