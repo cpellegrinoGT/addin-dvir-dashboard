@@ -300,14 +300,16 @@ geotab.addin.dvirDashboard = function () {
   // ── DVIR Classification ────────────────────────────────────────────────
 
   function getDefects(log) {
-    var list = log.defectList || log.dvirDefects || log.defects || [];
+    // DVIRLog.dvirDefects is the array of DVIRDefect objects
+    // DVIRLog.defectList contains Group objects (not what we want)
+    var list = log.dvirDefects || [];
     if (!Array.isArray(list)) return [];
     return list;
   }
 
   function getRepairStatus(defect) {
-    // RepairStatus is a string: "NotRepaired", "NotNecessary", or "Repaired"
-    var status = defect.repairStatusType || defect.repairStatus || defect.RepairStatus || "";
+    // DVIRDefect.repairStatus is a string: "NotRepaired", "NotNecessary", or "Repaired"
+    var status = defect.repairStatus || "";
     if (typeof status === "string") return status;
     return "";
   }
@@ -423,32 +425,37 @@ geotab.addin.dvirDashboard = function () {
           defectName = defect.defect.name || defect.defect.description || "--";
           severity = defect.defect.severity || "--";
         }
-        if (defect.group && defect.group.name) {
-          part = defect.group.name;
-        } else if (defect.part) {
-          part = defect.part.name || defect.part || "--";
+        if (defect.part) {
+          part = typeof defect.part === "object" ? (defect.part.name || "--") : (defect.part || "--");
         }
 
-        // Repair details
+        // Repair details — API uses "repairUser" not "repairedBy"
         var repairedBy = "--";
         var repairDate = null;
-        if (defect.repairedBy) {
-          if (typeof defect.repairedBy === "object") {
-            if (defect.repairedBy.id && driverMap[defect.repairedBy.id]) {
-              var u = driverMap[defect.repairedBy.id];
-              repairedBy = ((u.firstName || "") + " " + (u.lastName || "")).trim() || u.name || defect.repairedBy.id;
+        var repairUserObj = defect.repairUser || null;
+        if (repairUserObj) {
+          if (typeof repairUserObj === "object") {
+            if (repairUserObj.id && driverMap[repairUserObj.id]) {
+              var u = driverMap[repairUserObj.id];
+              repairedBy = ((u.firstName || "") + " " + (u.lastName || "")).trim() || u.name || repairUserObj.id;
             } else {
-              repairedBy = defect.repairedBy.name || defect.repairedBy.id || "--";
+              repairedBy = repairUserObj.name || repairUserObj.id || "--";
             }
           } else {
-            repairedBy = defect.repairedBy;
+            repairedBy = repairUserObj;
           }
         }
-        if (defect.repairDateTime || defect.repairDate) {
-          repairDate = defect.repairDateTime || defect.repairDate;
+        if (defect.repairDateTime) {
+          repairDate = defect.repairDateTime;
         }
 
-        var remarks = defect.comment || defect.remark || defect.remarks || "--";
+        // Remarks come from defectRemarks array
+        var remarks = "--";
+        if (Array.isArray(defect.defectRemarks) && defect.defectRemarks.length > 0) {
+          remarks = defect.defectRemarks.map(function (r) {
+            return r.remark || r.comment || r.text || "";
+          }).filter(function (r) { return r; }).join("; ") || "--";
+        }
 
         rows.push({
           vehicle: getDeviceName(log),
@@ -685,11 +692,11 @@ geotab.addin.dvirDashboard = function () {
         if (log.driver && log.driver.id && log.driver.id !== "UnknownDriverId") {
           driverIds.push(log.driver.id);
         }
-        // Also collect repairedBy user IDs from defects
+        // Also collect repairUser IDs from defects
         var defects = getDefects(log);
         defects.forEach(function (defect) {
-          if (defect.repairedBy && typeof defect.repairedBy === "object" && defect.repairedBy.id) {
-            driverIds.push(defect.repairedBy.id);
+          if (defect.repairUser && typeof defect.repairUser === "object" && defect.repairUser.id) {
+            driverIds.push(defect.repairUser.id);
           }
         });
       });
