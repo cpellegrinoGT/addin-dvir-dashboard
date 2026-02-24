@@ -680,17 +680,19 @@ geotab.addin.dvirDashboard = function () {
 
       dvirData.logs = logs;
       console.log("DVIR Dashboard:", logs.length, "DVIRLogs fetched");
-      // Debug: dump every unique key set and any log with more than 16 keys or non-empty defect-related props
-      logs.forEach(function (l, idx) {
-        var keys = Object.keys(l);
-        if (keys.length !== 16) {
-          console.log("DVIR Dashboard: log[" + idx + "] has " + keys.length + " keys:", keys);
-          console.log("DVIR Dashboard: log[" + idx + "] full:", JSON.stringify(l, null, 2).substring(0, 3000));
+
+      // Diagnostic: try fetching DVIRDefect as a separate entity type
+      apiCall("Get", {
+        typeName: "DVIRDefect",
+        resultsLimit: 10
+      }).then(function (defects) {
+        console.log("DVIR Dashboard: DVIRDefect query returned", (defects || []).length, "results");
+        if (defects && defects.length > 0) {
+          console.log("DVIR Dashboard: DVIRDefect[0] keys:", Object.keys(defects[0]));
+          console.log("DVIR Dashboard: DVIRDefect[0]:", JSON.stringify(defects[0], null, 2).substring(0, 2000));
         }
-        // Check defectList children
-        if (l.defectList && l.defectList.children && l.defectList.children.length > 0) {
-          console.log("DVIR Dashboard: log[" + idx + "] has defectList.children:", JSON.stringify(l.defectList, null, 2).substring(0, 2000));
-        }
+      }).catch(function (e) {
+        console.error("DVIR Dashboard: DVIRDefect query failed:", e);
       });
       els.loadingText.textContent = "Fetching driver info...";
       setProgress(85);
