@@ -223,109 +223,55 @@ geotab.addin.dvirDashboard = function () {
 
   // ── DVIR Data Fetch ────────────────────────────────────────────────────
 
-  function fetchDVIRStubs(dateRange, onProgress) {
-    var CHUNK_DAYS = 7;
-    var fromMs = new Date(dateRange.from).getTime();
+  // Primary: GetFeed returns full DVIRLog objects with dVIRDefects populated.
+  // Each GetFeed call counts as 1 API call regardless of result count.
+  function fetchDVIRLogsViaFeed(dateRange, onProgress) {
+    var LIMIT = 5000;
     var toMs = new Date(dateRange.to).getTime();
-    var chunks = [];
-    var cursor = fromMs;
-    while (cursor < toMs) {
-      var chunkEnd = Math.min(cursor + CHUNK_DAYS * 86400000, toMs);
-      chunks.push({
-        from: new Date(cursor).toISOString(),
-        to: new Date(chunkEnd).toISOString()
-      });
-      cursor = chunkEnd;
-    }
+    var allLogs = [];
+    var fromVersion = null;
 
-    var totalChunks = chunks.length;
-    var completedChunks = 0;
-    var allLogStubs = [];
+    function nextPage() {
+      if (isAborted()) return Promise.resolve(allLogs);
 
-    return chunks.reduce(function (chain, chunk, chunkIdx) {
-      return chain.then(function () {
-        if (isAborted()) return;
-        var pause = chunkIdx > 0 ? delay(100) : Promise.resolve();
-        return pause.then(function () {
-          if (isAborted()) return;
-          return apiCall("Get", {
-            typeName: "DVIRLog",
-            search: {
-              fromDate: chunk.from,
-              toDate: chunk.to
-            }
-          }).then(function (logs) {
-            allLogStubs = allLogStubs.concat(logs || []);
-            completedChunks++;
-            if (onProgress) onProgress(completedChunks / totalChunks * 100);
-          });
-        });
-      });
-    }, Promise.resolve()).then(function () {
-      return allLogStubs;
-    });
-  }
+      var params = {
+        typeName: "DVIRLog",
+        search: { fromDate: dateRange.from },
+        resultsLimit: LIMIT
+      };
+      if (fromVersion) {
+        params.fromVersion = fromVersion;
+      }
 
-  function enrichDVIRLogs(stubs, onProgress) {
-    if (stubs.length === 0) return Promise.resolve([]);
+      return apiCall("GetFeed", params).then(function (feed) {
+        if (!feed) return allLogs;
 
-    // Build multiCall batches — sequential to respect 5000 calls/min API limit
-    var BATCH = 50;
-    var calls = stubs.map(function (log) {
-      return ["Get", { typeName: "DVIRLog", search: { id: log.id } }];
-    });
-    var batches = [];
-    for (var i = 0; i < calls.length; i += BATCH) {
-      batches.push(calls.slice(i, i + BATCH));
-    }
+        var data = feed.data || [];
+        fromVersion = feed.toVersion || null;
 
-    var totalBatches = batches.length;
-    var completedBatches = 0;
-    var fullLogs = [];
-    var errors = 0;
-
-    function processBatch(batch, retries) {
-      if (retries === undefined) retries = 2;
-      return apiMultiCall(batch).then(function (results) {
-        results.forEach(function (arr) {
-          if (Array.isArray(arr) && arr.length > 0) {
-            fullLogs.push(arr[0]);
+        // Filter to within our date range (GetFeed only supports fromDate)
+        data.forEach(function (log) {
+          var logTime = new Date(log.dateTime).getTime();
+          if (logTime <= toMs) {
+            allLogs.push(log);
           }
         });
-      }).catch(function (err) {
-        // Retry on rate limit with backoff
-        if (err && err.isOverLimitException && retries > 0) {
-          var waitSec = (err.rateLimit && err.rateLimit.retryAfter) || 5;
-          console.warn("DVIR Dashboard: rate limited, waiting", waitSec, "s before retry");
-          return delay(waitSec * 1000 + 500).then(function () {
-            return processBatch(batch, retries - 1);
-          });
+
+        if (onProgress) onProgress(allLogs.length);
+
+        // If we got a full page AND haven't passed our toDate, fetch more
+        if (data.length >= LIMIT && fromVersion) {
+          var lastLogTime = data.length > 0 ? new Date(data[data.length - 1].dateTime).getTime() : 0;
+          if (lastLogTime <= toMs) {
+            return delay(200).then(nextPage);
+          }
         }
-        errors++;
-        console.warn("DVIR Dashboard: batch failed, skipping:", err && err.message || err);
-      }).then(function () {
-        completedBatches++;
-        if (onProgress) onProgress(completedBatches / totalBatches * 100);
+
+        return allLogs;
       });
     }
 
-    // Process batches sequentially with delay between each
-    return batches.reduce(function (chain, batch, idx) {
-      return chain.then(function () {
-        if (isAborted()) return;
-        // Pace requests: ~50 calls per batch, delay 1s between = ~3000 calls/min (under 5000 limit)
-        var pause = idx > 0 ? delay(1000) : Promise.resolve();
-        return pause.then(function () {
-          if (isAborted()) return;
-          return processBatch(batch);
-        });
-      });
-    }, Promise.resolve()).then(function () {
-      if (errors > 0) {
-        console.warn("DVIR Dashboard:", errors, "of", totalBatches, "batches failed");
-      }
-      return fullLogs;
-    });
+    return nextPage();
   }
 
   function fetchDrivers(driverIds) {
@@ -743,90 +689,58 @@ geotab.addin.dvirDashboard = function () {
 
     els.progress.textContent = "Loading...";
 
-    // Phase 1: Fetch stubs (fast — no defect data yet)
-    fetchDVIRStubs(dateRange, function (pct) {
-      setProgress(pct * 0.3);
-      els.loadingText.textContent = "Fetching inspections... " + Math.round(pct) + "%";
-    }).then(function (stubs) {
+    // Single-phase fetch via GetFeed — returns full DVIRLog objects with dVIRDefects populated
+    fetchDVIRLogsViaFeed(dateRange, function (count) {
+      els.loadingText.textContent = "Fetching inspections... " + count + " so far";
+    }).then(function (logs) {
       if (isAborted()) return;
 
-      console.log("DVIR Dashboard: Phase 1 complete —", stubs.length, "DVIRLogs");
+      console.log("DVIR Dashboard: GetFeed complete —", logs.length, "DVIRLogs");
 
-      // Collect driver IDs from stubs for early name resolution
+      var logsWithDefects = logs.filter(function (l) { return getDefects(l).length > 0; });
+      console.log("DVIR Dashboard:", logsWithDefects.length, "DVIRs have defects");
+
+      // Collect all driver IDs (from logs + repair users)
       var driverIds = [];
-      stubs.forEach(function (log) {
+      logs.forEach(function (log) {
         if (log.driver && log.driver.id && log.driver.id !== "UnknownDriverId") {
           driverIds.push(log.driver.id);
         }
+        getDefects(log).forEach(function (defect) {
+          if (defect.repairUser && typeof defect.repairUser === "object" && defect.repairUser.id) {
+            driverIds.push(defect.repairUser.id);
+          }
+        });
       });
 
-      // Show stub data immediately while Phase 2 runs
       els.loadingText.textContent = "Resolving drivers...";
       return fetchDrivers(driverIds).then(function () {
         if (isAborted()) return;
 
-        // Render fleet table from stubs (defect counts will be 0)
-        dvirData.logs = stubs;
-        dvirData.fleetRows = buildFleetRows(stubs);
-        dvirData.defectRows = [];
+        // Build rows and render
+        dvirData.logs = logs;
+        dvirData.fleetRows = buildFleetRows(logs);
+        dvirData.defectRows = buildDefectRows(logs);
         renderKpis();
         renderActiveTab();
         showLoading(false);
-        els.progress.textContent = stubs.length + " DVIRs — loading defect details...";
 
-        if (stubs.length === 0) {
+        if (logs.length === 0) {
           showEmpty(true);
           els.empty.textContent = "No DVIRs found for the selected filters.";
+          els.progress.textContent = "";
           return;
         }
 
-        // Phase 2: Enrich with defect data (parallel batches of 100)
-        return enrichDVIRLogs(stubs, function (pct) {
-          els.progress.textContent = stubs.length + " DVIRs — defects " + Math.round(pct) + "%";
-        }).then(function (fullLogs) {
-          if (isAborted()) return;
-
-          dvirData.logs = fullLogs;
-
-          var logsWithDefects = fullLogs.filter(function (l) { return getDefects(l).length > 0; });
-          console.log("DVIR Dashboard: Phase 2 complete —", logsWithDefects.length, "with defects");
-
-          // Collect repairUser IDs from defect data
-          var repairUserIds = [];
-          fullLogs.forEach(function (log) {
-            getDefects(log).forEach(function (defect) {
-              if (defect.repairUser && typeof defect.repairUser === "object" && defect.repairUser.id) {
-                repairUserIds.push(defect.repairUser.id);
-              }
-            });
-          });
-
-          return fetchDrivers(repairUserIds).then(function () {
-            if (isAborted()) return;
-
-            // Rebuild with full defect data
-            dvirData.fleetRows = buildFleetRows(fullLogs);
-            dvirData.defectRows = buildDefectRows(fullLogs);
-            renderKpis();
-            renderActiveTab();
-
-            var totalDefects = dvirData.defectRows.length;
-            els.progress.textContent = dvirData.fleetRows.length + " DVIRs, " + totalDefects + " defects";
-          });
-        });
+        var totalDefects = dvirData.defectRows.length;
+        els.progress.textContent = dvirData.fleetRows.length + " DVIRs, " + totalDefects + " defects";
       });
     }).catch(function (err) {
       if (!isAborted()) {
         console.error("DVIR Dashboard error:", err);
         showLoading(false);
-        // If we already have stub data displayed, show a warning instead of wiping the table
-        if (dvirData.fleetRows.length > 0) {
-          showWarning("Defect details failed to load. Fleet summary is shown without defect counts.");
-          els.progress.textContent = dvirData.fleetRows.length + " DVIRs (defect loading failed)";
-        } else {
-          showEmpty(true);
-          els.empty.textContent = "Error loading data. Please try again.";
-        }
+        showEmpty(true);
+        els.empty.textContent = "Error loading data. Please try again.";
       }
     });
   }
