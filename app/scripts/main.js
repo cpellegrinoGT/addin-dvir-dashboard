@@ -338,9 +338,8 @@ geotab.addin.dvirDashboard = function () {
   // ── DVIR Classification ────────────────────────────────────────────────
 
   function getDefects(log) {
-    // DVIRLog.dvirDefects is the array of DVIRDefect objects
-    // DVIRLog.defectList contains Group objects (not what we want)
-    var list = log.dvirDefects || [];
+    // Geotab API casing quirk: property may be dVIRDefects, dvirDefects, or DVIRDefects
+    var list = log.dVIRDefects || log.dvirDefects || log.DVIRDefects || [];
     if (!Array.isArray(list)) return [];
     return list;
   }
@@ -719,56 +718,33 @@ geotab.addin.dvirDashboard = function () {
       dvirData.logs = logs;
       console.log("DVIR Dashboard:", logs.length, "DVIRLogs fetched (by-ID)");
 
-      // DEBUG: scan ALL logs for defect indicators
+      // DEBUG: scan ALL logs — dump every key set and check all defect property variants
+      var defectProps = ["dVIRDefects", "dvirDefects", "DVIRDefects", "defects", "Defects"];
       logs.forEach(function (log, idx) {
+        var keys = Object.keys(log).sort();
+        var found = [];
+        defectProps.forEach(function (p) {
+          if (log[p] !== undefined) found.push(p + "=" + JSON.stringify(log[p]).substring(0, 200));
+        });
         var dl = log.defectList;
         var childCount = (dl && dl.children) ? dl.children.length : 0;
-        var keyCount = Object.keys(log).length;
-        if (childCount > 0 || keyCount !== 16) {
-          console.log("DVIR Dashboard: LOG[" + idx + "] has " + childCount + " defectList children, " + keyCount + " keys");
-          console.log("DVIR Dashboard: LOG[" + idx + "] keys:", Object.keys(log).sort().join(", "));
-          console.log("DVIR Dashboard: LOG[" + idx + "] full JSON:", JSON.stringify(log, null, 2));
+        // Log every DVIR that has any defect-related data or unusual key count
+        if (found.length > 0 || childCount > 0 || keys.length !== 16) {
+          console.log("DVIR[" + idx + "] id=" + log.id + " keys(" + keys.length + "):", keys.join(", "));
+          console.log("DVIR[" + idx + "] defect props:", found.length > 0 ? found.join("; ") : "NONE");
+          console.log("DVIR[" + idx + "] defectList.children:", childCount);
+          if (found.length > 0 || keys.length > 16) {
+            console.log("DVIR[" + idx + "] FULL:", JSON.stringify(log, null, 2));
+          }
         }
       });
-      console.log("DVIR Dashboard: scan complete — logs with defectList.children > 0:", logs.filter(function (l) { return l.defectList && l.defectList.children && l.defectList.children.length > 0; }).length);
-
-      // DEBUG: try direct REST call bypassing JS API wrapper
-      var session = api.getSession ? api.getSession() : null;
-      if (!session) {
-        try { session = { database: api.database, sessionId: api.sessionId, userName: api.userName, server: api.server }; } catch(e) {}
-      }
-      console.log("DVIR Dashboard: session info:", JSON.stringify(session, null, 2));
-      if (session && logs.length > 0) {
-        var server = session.server || location.hostname;
-        var rpcUrl = "https://" + server + "/apiv1";
-        var rpcBody = JSON.stringify({
-          method: "Get",
-          params: {
-            typeName: "DVIRLog",
-            search: { id: logs[0].id },
-            credentials: {
-              database: session.database,
-              sessionId: session.sessionId,
-              userName: session.userName
-            }
-          }
-        });
-        fetch(rpcUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: rpcBody
-        }).then(function (resp) { return resp.json(); }).then(function (data) {
-          var result = data.result || data;
-          if (Array.isArray(result) && result.length > 0) {
-            console.log("DVIR Dashboard: RAW REST keys:", Object.keys(result[0]).sort().join(", "));
-            console.log("DVIR Dashboard: RAW REST full:", JSON.stringify(result[0], null, 2));
-          } else {
-            console.log("DVIR Dashboard: RAW REST response:", JSON.stringify(data, null, 2).substring(0, 3000));
-          }
-        }).catch(function (e) {
-          console.error("DVIR Dashboard: RAW REST error:", e);
-        });
-      }
+      // Summary
+      var summary = { total: logs.length, withDefectProp: 0, withChildren: 0 };
+      logs.forEach(function (l) {
+        defectProps.forEach(function (p) { if (l[p] && Array.isArray(l[p]) && l[p].length > 0) summary.withDefectProp++; });
+        if (l.defectList && l.defectList.children && l.defectList.children.length > 0) summary.withChildren++;
+      });
+      console.log("DVIR SCAN SUMMARY:", JSON.stringify(summary));
 
       els.loadingText.textContent = "Fetching driver info...";
       setProgress(85);
