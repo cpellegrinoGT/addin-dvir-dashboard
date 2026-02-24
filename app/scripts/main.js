@@ -495,6 +495,7 @@ geotab.addin.dvirDashboard = function () {
         }
 
         rows.push({
+          dvirLogId: log.id,
           vehicle: getDeviceName(log),
           deviceId: log.device ? log.device.id : null,
           driver: getDriverName(log),
@@ -607,13 +608,18 @@ geotab.addin.dvirDashboard = function () {
     }
 
     sortRows(rows, sortState.defects);
-    renderTableBody(els.defectBody, rows, function (r) {
+
+    var frag = document.createDocumentFragment();
+    rows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      tr.className = "dvir-clickable-row";
+
       var badgeClass = "dvir-badge ";
       if (r.repairStatusKey === "outstanding") badgeClass += "dvir-badge-outstanding";
       else if (r.repairStatusKey === "notNecessary") badgeClass += "dvir-badge-not-necessary";
       else if (r.repairStatusKey === "repaired") badgeClass += "dvir-badge-repaired";
 
-      return '<td>' + escapeHtml(r.vehicle) + '</td>' +
+      tr.innerHTML = '<td>' + escapeHtml(r.vehicle) + '</td>' +
         '<td>' + escapeHtml(r.driver) + '</td>' +
         '<td>' + formatDateTime(r.date) + '</td>' +
         '<td>' + escapeHtml(r.part) + '</td>' +
@@ -623,7 +629,16 @@ geotab.addin.dvirDashboard = function () {
         '<td>' + escapeHtml(r.repairedBy) + '</td>' +
         '<td>' + formatDate(r.repairDate) + '</td>' +
         '<td>' + escapeHtml(r.remarks) + '</td>';
+
+      tr.addEventListener("click", function () {
+        var hash = "dvir,device:" + r.deviceId + ",id:" + r.dvirLogId + ",trailer:!n";
+        window.top.location.hash = hash;
+      });
+
+      frag.appendChild(tr);
     });
+    els.defectBody.innerHTML = "";
+    els.defectBody.appendChild(frag);
 
     if (rows.length === 0) {
       els.defectBody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#888;padding:20px;">No defects found.</td></tr>';
