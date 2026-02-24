@@ -716,35 +716,9 @@ geotab.addin.dvirDashboard = function () {
       if (isAborted()) return;
 
       dvirData.logs = logs;
-      console.log("DVIR Dashboard:", logs.length, "DVIRLogs fetched (by-ID)");
 
-      // DEBUG: scan ALL logs — dump every key set and check all defect property variants
-      var defectProps = ["dVIRDefects", "dvirDefects", "DVIRDefects", "defects", "Defects"];
-      logs.forEach(function (log, idx) {
-        var keys = Object.keys(log).sort();
-        var found = [];
-        defectProps.forEach(function (p) {
-          if (log[p] !== undefined) found.push(p + "=" + JSON.stringify(log[p]).substring(0, 200));
-        });
-        var dl = log.defectList;
-        var childCount = (dl && dl.children) ? dl.children.length : 0;
-        // Log every DVIR that has any defect-related data or unusual key count
-        if (found.length > 0 || childCount > 0 || keys.length !== 16) {
-          console.log("DVIR[" + idx + "] id=" + log.id + " keys(" + keys.length + "):", keys.join(", "));
-          console.log("DVIR[" + idx + "] defect props:", found.length > 0 ? found.join("; ") : "NONE");
-          console.log("DVIR[" + idx + "] defectList.children:", childCount);
-          if (found.length > 0 || keys.length > 16) {
-            console.log("DVIR[" + idx + "] FULL:", JSON.stringify(log, null, 2));
-          }
-        }
-      });
-      // Summary
-      var summary = { total: logs.length, withDefectProp: 0, withChildren: 0 };
-      logs.forEach(function (l) {
-        defectProps.forEach(function (p) { if (l[p] && Array.isArray(l[p]) && l[p].length > 0) summary.withDefectProp++; });
-        if (l.defectList && l.defectList.children && l.defectList.children.length > 0) summary.withChildren++;
-      });
-      console.log("DVIR SCAN SUMMARY:", JSON.stringify(summary));
+      var logsWithDefects = logs.filter(function (l) { return getDefects(l).length > 0; });
+      console.log("DVIR Dashboard:", logs.length, "DVIRLogs,", logsWithDefects.length, "with defects");
 
       els.loadingText.textContent = "Fetching driver info...";
       setProgress(85);
