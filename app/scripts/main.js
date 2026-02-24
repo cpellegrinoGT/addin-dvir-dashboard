@@ -680,6 +680,18 @@ geotab.addin.dvirDashboard = function () {
 
       dvirData.logs = logs;
       console.log("DVIR Dashboard:", logs.length, "DVIRLogs fetched");
+      // Debug: dump every unique key set and any log with more than 16 keys or non-empty defect-related props
+      logs.forEach(function (l, idx) {
+        var keys = Object.keys(l);
+        if (keys.length !== 16) {
+          console.log("DVIR Dashboard: log[" + idx + "] has " + keys.length + " keys:", keys);
+          console.log("DVIR Dashboard: log[" + idx + "] full:", JSON.stringify(l, null, 2).substring(0, 3000));
+        }
+        // Check defectList children
+        if (l.defectList && l.defectList.children && l.defectList.children.length > 0) {
+          console.log("DVIR Dashboard: log[" + idx + "] has defectList.children:", JSON.stringify(l.defectList, null, 2).substring(0, 2000));
+        }
+      });
       els.loadingText.textContent = "Fetching driver info...";
       setProgress(85);
 
