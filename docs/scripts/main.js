@@ -274,46 +274,6 @@ geotab.addin.dvirDashboard = function () {
     return nextPage();
   }
 
-  function fetchDrivers(driverIds) {
-    if (driverIds.length === 0) return Promise.resolve();
-
-    // Batch fetch unique driver IDs
-    var unique = [];
-    var seen = {};
-    driverIds.forEach(function (id) {
-      if (!seen[id] && !driverMap[id]) {
-        seen[id] = true;
-        unique.push(id);
-      }
-    });
-
-    if (unique.length === 0) return Promise.resolve();
-
-    var calls = unique.map(function (id) {
-      return ["Get", { typeName: "User", search: { id: id } }];
-    });
-
-    // Batch in groups of 50
-    var BATCH = 50;
-    var batches = [];
-    for (var i = 0; i < calls.length; i += BATCH) {
-      batches.push(calls.slice(i, i + BATCH));
-    }
-
-    return batches.reduce(function (chain, batch) {
-      return chain.then(function () {
-        return apiMultiCall(batch).then(function (results) {
-          results.forEach(function (arr) {
-            if (Array.isArray(arr) && arr.length > 0) {
-              var user = arr[0];
-              driverMap[user.id] = user;
-            }
-          });
-        });
-      });
-    }, Promise.resolve());
-  }
-
   // ── DVIR Classification ────────────────────────────────────────────────
 
   function getDefects(log) {
@@ -700,41 +660,23 @@ geotab.addin.dvirDashboard = function () {
       var logsWithDefects = logs.filter(function (l) { return getDefects(l).length > 0; });
       console.log("DVIR Dashboard:", logsWithDefects.length, "DVIRs have defects");
 
-      // Collect all driver IDs (from logs + repair users)
-      var driverIds = [];
-      logs.forEach(function (log) {
-        if (log.driver && log.driver.id && log.driver.id !== "UnknownDriverId") {
-          driverIds.push(log.driver.id);
-        }
-        getDefects(log).forEach(function (defect) {
-          if (defect.repairUser && typeof defect.repairUser === "object" && defect.repairUser.id) {
-            driverIds.push(defect.repairUser.id);
-          }
-        });
-      });
+      // Build rows and render (driver names already resolved from init)
+      dvirData.logs = logs;
+      dvirData.fleetRows = buildFleetRows(logs);
+      dvirData.defectRows = buildDefectRows(logs);
+      renderKpis();
+      renderActiveTab();
+      showLoading(false);
 
-      els.loadingText.textContent = "Resolving drivers...";
-      return fetchDrivers(driverIds).then(function () {
-        if (isAborted()) return;
+      if (logs.length === 0) {
+        showEmpty(true);
+        els.empty.textContent = "No DVIRs found for the selected filters.";
+        els.progress.textContent = "";
+        return;
+      }
 
-        // Build rows and render
-        dvirData.logs = logs;
-        dvirData.fleetRows = buildFleetRows(logs);
-        dvirData.defectRows = buildDefectRows(logs);
-        renderKpis();
-        renderActiveTab();
-        showLoading(false);
-
-        if (logs.length === 0) {
-          showEmpty(true);
-          els.empty.textContent = "No DVIRs found for the selected filters.";
-          els.progress.textContent = "";
-          return;
-        }
-
-        var totalDefects = dvirData.defectRows.length;
-        els.progress.textContent = dvirData.fleetRows.length + " DVIRs, " + totalDefects + " defects";
-      });
+      var totalDefects = dvirData.defectRows.length;
+      els.progress.textContent = dvirData.fleetRows.length + " DVIRs, " + totalDefects + " defects";
     }).catch(function (err) {
       if (!isAborted()) {
         console.error("DVIR Dashboard error:", err);
@@ -842,10 +784,11 @@ geotab.addin.dvirDashboard = function () {
         exportCsv("dvir_defect_detail.csv", headers, dvirData.defectRows);
       });
 
-      // Load foundation data: Devices + Groups
+      // Load foundation data: Devices + Groups + Users (3 API calls total)
       apiMultiCall([
         ["Get", { typeName: "Device", resultsLimit: 5000 }],
-        ["Get", { typeName: "Group", resultsLimit: 5000 }]
+        ["Get", { typeName: "Group", resultsLimit: 5000 }],
+        ["Get", { typeName: "User", resultsLimit: 50000 }]
       ]).then(function (results) {
         var now = new Date();
         allDevices = (results[0] || []).filter(function (d) {
@@ -854,6 +797,7 @@ geotab.addin.dvirDashboard = function () {
         });
 
         var groups = results[1] || [];
+        var users = results[2] || [];
 
         // Build device map
         allDevices.forEach(function (d) {
@@ -863,6 +807,11 @@ geotab.addin.dvirDashboard = function () {
         // Build group map
         groups.forEach(function (g) {
           allGroups[g.id] = g;
+        });
+
+        // Build driver/user map
+        users.forEach(function (u) {
+          driverMap[u.id] = u;
         });
 
         populateGroupDropdown();
