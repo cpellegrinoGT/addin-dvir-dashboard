@@ -719,15 +719,54 @@ geotab.addin.dvirDashboard = function () {
       dvirData.logs = logs;
       console.log("DVIR Dashboard:", logs.length, "DVIRLogs fetched (by-ID)");
 
-      // DEBUG: dump all keys and defect-related properties from first log
-      if (logs.length > 0) {
-        var sample = logs[0];
-        console.log("DVIR Dashboard: sample log keys:", Object.keys(sample).sort().join(", "));
-        console.log("DVIR Dashboard: sample log full JSON:", JSON.stringify(sample, null, 2));
-        // Check every possible defect property name
-        ["dvirDefects", "DVIRDefects", "defects", "Defects", "defectList", "DefectList"].forEach(function (prop) {
-          var val = sample[prop];
-          console.log("DVIR Dashboard: sample[" + prop + "]:", typeof val, Array.isArray(val) ? "(array len=" + val.length + ")" : "", val != null ? JSON.stringify(val).substring(0, 500) : "null/undefined");
+      // DEBUG: scan ALL logs for defect indicators
+      logs.forEach(function (log, idx) {
+        var dl = log.defectList;
+        var childCount = (dl && dl.children) ? dl.children.length : 0;
+        var keyCount = Object.keys(log).length;
+        if (childCount > 0 || keyCount !== 16) {
+          console.log("DVIR Dashboard: LOG[" + idx + "] has " + childCount + " defectList children, " + keyCount + " keys");
+          console.log("DVIR Dashboard: LOG[" + idx + "] keys:", Object.keys(log).sort().join(", "));
+          console.log("DVIR Dashboard: LOG[" + idx + "] full JSON:", JSON.stringify(log, null, 2));
+        }
+      });
+      console.log("DVIR Dashboard: scan complete — logs with defectList.children > 0:", logs.filter(function (l) { return l.defectList && l.defectList.children && l.defectList.children.length > 0; }).length);
+
+      // DEBUG: try direct REST call bypassing JS API wrapper
+      var session = api.getSession ? api.getSession() : null;
+      if (!session) {
+        try { session = { database: api.database, sessionId: api.sessionId, userName: api.userName, server: api.server }; } catch(e) {}
+      }
+      console.log("DVIR Dashboard: session info:", JSON.stringify(session, null, 2));
+      if (session && logs.length > 0) {
+        var server = session.server || location.hostname;
+        var rpcUrl = "https://" + server + "/apiv1";
+        var rpcBody = JSON.stringify({
+          method: "Get",
+          params: {
+            typeName: "DVIRLog",
+            search: { id: logs[0].id },
+            credentials: {
+              database: session.database,
+              sessionId: session.sessionId,
+              userName: session.userName
+            }
+          }
+        });
+        fetch(rpcUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: rpcBody
+        }).then(function (resp) { return resp.json(); }).then(function (data) {
+          var result = data.result || data;
+          if (Array.isArray(result) && result.length > 0) {
+            console.log("DVIR Dashboard: RAW REST keys:", Object.keys(result[0]).sort().join(", "));
+            console.log("DVIR Dashboard: RAW REST full:", JSON.stringify(result[0], null, 2));
+          } else {
+            console.log("DVIR Dashboard: RAW REST response:", JSON.stringify(data, null, 2).substring(0, 3000));
+          }
+        }).catch(function (e) {
+          console.error("DVIR Dashboard: RAW REST error:", e);
         });
       }
 
