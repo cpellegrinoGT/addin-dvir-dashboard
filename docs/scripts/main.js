@@ -46,6 +46,15 @@ geotab.addin.dvirDashboard = function () {
     return div.innerHTML;
   }
 
+  function dvirLink(dvirId, deviceId, label) {
+    return '<a href="#" class="dvir-log-link" data-dvir-id="' + escapeHtml(dvirId) + '" data-device-id="' + escapeHtml(deviceId || "") + '">' + escapeHtml(label) + '</a>';
+  }
+
+  function goToDvir(dvirId, deviceId) {
+    var hash = "dvir,device:" + deviceId + ",id:" + dvirId + ",trailer:!n";
+    window.top.location.hash = hash;
+  }
+
   function formatDate(d) {
     if (!d) return "--";
     var dt = new Date(d);
@@ -561,19 +570,12 @@ geotab.addin.dvirDashboard = function () {
     }
 
     sortRows(rows, sortState.fleet);
-
-    var frag = document.createDocumentFragment();
-    rows.forEach(function (r) {
-      var tr = document.createElement("tr");
-      tr.className = "dvir-clickable-row";
-      tr.dataset.dvirId = r.id;
-      tr.dataset.deviceId = r.deviceId || "";
-
+    renderTableBody(els.fleetBody, rows, function (r) {
       var safeClass = r.safeToOperate ? "dvir-badge-safe" : "dvir-badge-unsafe";
       var safeText = r.safeToOperate ? "Yes" : "No";
       var outstandingClass = r.outstandingDefects > 0 ? ' class="dvir-outstanding-count"' : '';
 
-      tr.innerHTML = '<td>' + escapeHtml(r.vehicle) + '</td>' +
+      return '<td>' + dvirLink(r.id, r.deviceId, r.vehicle) + '</td>' +
         '<td>' + escapeHtml(r.driver) + '</td>' +
         '<td>' + formatDateTime(r.date) + '</td>' +
         '<td>' + escapeHtml(r.logType) + '</td>' +
@@ -582,16 +584,7 @@ geotab.addin.dvirDashboard = function () {
         '<td' + outstandingClass + '>' + r.outstandingDefects + '</td>' +
         '<td>' + r.notNecessary + '</td>' +
         '<td>' + r.repaired + '</td>';
-
-      tr.addEventListener("click", function () {
-        var hash = "dvir,device:" + r.deviceId + ",id:" + r.id + ",trailer:!n";
-        window.top.location.hash = hash;
-      });
-
-      frag.appendChild(tr);
     });
-    els.fleetBody.innerHTML = "";
-    els.fleetBody.appendChild(frag);
 
     if (rows.length === 0) {
       els.fleetBody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;padding:20px;">No DVIRs found.</td></tr>';
@@ -619,18 +612,13 @@ geotab.addin.dvirDashboard = function () {
     }
 
     sortRows(rows, sortState.defects);
-
-    var frag = document.createDocumentFragment();
-    rows.forEach(function (r) {
-      var tr = document.createElement("tr");
-      tr.className = "dvir-clickable-row";
-
+    renderTableBody(els.defectBody, rows, function (r) {
       var badgeClass = "dvir-badge ";
       if (r.repairStatusKey === "outstanding") badgeClass += "dvir-badge-outstanding";
       else if (r.repairStatusKey === "notNecessary") badgeClass += "dvir-badge-not-necessary";
       else if (r.repairStatusKey === "repaired") badgeClass += "dvir-badge-repaired";
 
-      tr.innerHTML = '<td>' + escapeHtml(r.vehicle) + '</td>' +
+      return '<td>' + dvirLink(r.dvirLogId, r.deviceId, r.vehicle) + '</td>' +
         '<td>' + escapeHtml(r.driver) + '</td>' +
         '<td>' + formatDateTime(r.date) + '</td>' +
         '<td>' + escapeHtml(r.part) + '</td>' +
@@ -640,16 +628,7 @@ geotab.addin.dvirDashboard = function () {
         '<td>' + escapeHtml(r.repairedBy) + '</td>' +
         '<td>' + formatDate(r.repairDate) + '</td>' +
         '<td>' + escapeHtml(r.remarks) + '</td>';
-
-      tr.addEventListener("click", function () {
-        var hash = "dvir,device:" + r.deviceId + ",id:" + r.dvirLogId + ",trailer:!n";
-        window.top.location.hash = hash;
-      });
-
-      frag.appendChild(tr);
     });
-    els.defectBody.innerHTML = "";
-    els.defectBody.appendChild(frag);
 
     if (rows.length === 0) {
       els.defectBody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#888;padding:20px;">No defects found.</td></tr>';
@@ -895,6 +874,15 @@ geotab.addin.dvirDashboard = function () {
       els.apply.addEventListener("click", loadData);
       document.querySelector(".dvir-presets").addEventListener("click", onPresetClick);
       $("dvir-tabs").addEventListener("click", onTabClick);
+
+      // DVIR link click handler (delegated on content area)
+      $("dvir-content").addEventListener("click", function (e) {
+        var link = e.target.closest(".dvir-log-link");
+        if (link) {
+          e.preventDefault();
+          goToDvir(link.dataset.dvirId, link.dataset.deviceId);
+        }
+      });
 
       // Table sort listeners
       $("dvir-fleet-table").addEventListener("click", function (e) {

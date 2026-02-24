@@ -285,12 +285,15 @@
   background: #f0f5ff;
 }
 
-#dvir-root .dvir-clickable-row {
+#dvir-root .dvir-log-link {
+  color: #4a90d9;
+  text-decoration: none;
   cursor: pointer;
 }
 
-#dvir-root .dvir-clickable-row:hover {
-  background: #e3edfa;
+#dvir-root .dvir-log-link:hover {
+  text-decoration: underline;
+  color: #2a6cb6;
 }
 
 /* Sortable columns */
