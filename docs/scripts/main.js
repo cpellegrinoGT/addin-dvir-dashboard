@@ -681,19 +681,38 @@ geotab.addin.dvirDashboard = function () {
       dvirData.logs = logs;
       console.log("DVIR Dashboard:", logs.length, "DVIRLogs fetched");
 
-      // Diagnostic: try fetching DVIRDefect as a separate entity type
-      apiCall("Get", {
-        typeName: "DVIRDefect",
-        resultsLimit: 10
-      }).then(function (defects) {
-        console.log("DVIR Dashboard: DVIRDefect query returned", (defects || []).length, "results");
-        if (defects && defects.length > 0) {
-          console.log("DVIR Dashboard: DVIRDefect[0] keys:", Object.keys(defects[0]));
-          console.log("DVIR Dashboard: DVIRDefect[0]:", JSON.stringify(defects[0], null, 2).substring(0, 2000));
+      // Diagnostic: try GetFeed for DVIRLog to see if it returns more complete data
+      apiCall("GetFeed", {
+        typeName: "DVIRLog",
+        resultsLimit: 5
+      }).then(function (feed) {
+        var feedData = feed ? (feed.data || feed.result || feed) : [];
+        if (Array.isArray(feedData) && feedData.length > 0) {
+          console.log("DVIR Dashboard: GetFeed DVIRLog[0] keys:", Object.keys(feedData[0]));
+          console.log("DVIR Dashboard: GetFeed DVIRLog[0]:", JSON.stringify(feedData[0], null, 2).substring(0, 3000));
+        } else {
+          console.log("DVIR Dashboard: GetFeed result structure:", JSON.stringify(feed, null, 2).substring(0, 2000));
         }
       }).catch(function (e) {
-        console.error("DVIR Dashboard: DVIRDefect query failed:", e);
+        console.error("DVIR Dashboard: GetFeed failed:", e);
       });
+
+      // Diagnostic: fetch the defectList Group by ID to see its full children hierarchy
+      if (logs.length > 0 && logs[0].defectList && logs[0].defectList.id) {
+        var groupId = logs[0].defectList.id;
+        apiCall("Get", {
+          typeName: "Group",
+          search: { id: groupId }
+        }).then(function (groups) {
+          var g = Array.isArray(groups) ? groups[0] : groups;
+          if (g) {
+            console.log("DVIR Dashboard: defectList Group keys:", Object.keys(g));
+            console.log("DVIR Dashboard: defectList Group:", JSON.stringify(g, null, 2).substring(0, 3000));
+          }
+        }).catch(function (e) {
+          console.error("DVIR Dashboard: Group fetch failed:", e);
+        });
+      }
       els.loadingText.textContent = "Fetching driver info...";
       setProgress(85);
 
