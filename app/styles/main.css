@@ -285,6 +285,14 @@
   background: #f0f5ff;
 }
 
+#dvir-root .dvir-clickable-row {
+  cursor: pointer;
+}
+
+#dvir-root .dvir-clickable-row:hover {
+  background: #e3edfa;
+}
+
 /* Sortable columns */
 
 #dvir-root .dvir-sortable {

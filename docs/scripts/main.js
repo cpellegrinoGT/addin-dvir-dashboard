@@ -549,12 +549,19 @@ geotab.addin.dvirDashboard = function () {
     }
 
     sortRows(rows, sortState.fleet);
-    renderTableBody(els.fleetBody, rows, function (r) {
+
+    var frag = document.createDocumentFragment();
+    rows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      tr.className = "dvir-clickable-row";
+      tr.dataset.dvirId = r.id;
+      tr.dataset.deviceId = r.deviceId || "";
+
       var safeClass = r.safeToOperate ? "dvir-badge-safe" : "dvir-badge-unsafe";
       var safeText = r.safeToOperate ? "Yes" : "No";
       var outstandingClass = r.outstandingDefects > 0 ? ' class="dvir-outstanding-count"' : '';
 
-      return '<td>' + escapeHtml(r.vehicle) + '</td>' +
+      tr.innerHTML = '<td>' + escapeHtml(r.vehicle) + '</td>' +
         '<td>' + escapeHtml(r.driver) + '</td>' +
         '<td>' + formatDateTime(r.date) + '</td>' +
         '<td>' + escapeHtml(r.logType) + '</td>' +
@@ -563,7 +570,16 @@ geotab.addin.dvirDashboard = function () {
         '<td' + outstandingClass + '>' + r.outstandingDefects + '</td>' +
         '<td>' + r.notNecessary + '</td>' +
         '<td>' + r.repaired + '</td>';
+
+      tr.addEventListener("click", function () {
+        var hash = "dvir,device:" + r.deviceId + ",id:" + r.id + ",trailer:!n";
+        window.top.location.hash = hash;
+      });
+
+      frag.appendChild(tr);
     });
+    els.fleetBody.innerHTML = "";
+    els.fleetBody.appendChild(frag);
 
     if (rows.length === 0) {
       els.fleetBody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#888;padding:20px;">No DVIRs found.</td></tr>';
