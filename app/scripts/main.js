@@ -717,14 +717,19 @@ geotab.addin.dvirDashboard = function () {
       if (isAborted()) return;
 
       dvirData.logs = logs;
-      console.log("DVIR Dashboard:", logs.length, "DVIRLogs fetched");
+      console.log("DVIR Dashboard:", logs.length, "DVIRLogs fetched (by-ID)");
 
-      // Log defect counts for debugging
-      var logsWithDefects = logs.filter(function (l) {
-        var d = getDefects(l);
-        return d.length > 0;
-      });
-      console.log("DVIR Dashboard:", logsWithDefects.length, "DVIRLogs with defects");
+      // DEBUG: dump all keys and defect-related properties from first log
+      if (logs.length > 0) {
+        var sample = logs[0];
+        console.log("DVIR Dashboard: sample log keys:", Object.keys(sample).sort().join(", "));
+        console.log("DVIR Dashboard: sample log full JSON:", JSON.stringify(sample, null, 2));
+        // Check every possible defect property name
+        ["dvirDefects", "DVIRDefects", "defects", "Defects", "defectList", "DefectList"].forEach(function (prop) {
+          var val = sample[prop];
+          console.log("DVIR Dashboard: sample[" + prop + "]:", typeof val, Array.isArray(val) ? "(array len=" + val.length + ")" : "", val != null ? JSON.stringify(val).substring(0, 500) : "null/undefined");
+        });
+      }
 
       els.loadingText.textContent = "Fetching driver info...";
       setProgress(85);
