@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>DVIR Dashboard</title>
-  <link rel="stylesheet" href="styles/main.css?v=3" />
+  <link rel="stylesheet" href="styles/main.css?v=4" />
 </head>
 <body>
   <div id="dvir-root">
@@ -32,17 +32,33 @@
       </div>
 
       <div class="dvir-control-group">
-        <label for="dvir-group">Group</label>
-        <select id="dvir-group">
-          <option value="all">All Groups</option>
-        </select>
+        <label>Group</label>
+        <div id="dvir-group" class="dvir-multi-select">
+          <button type="button" class="dvir-ms-toggle">All Groups</button>
+          <div class="dvir-ms-dropdown">
+            <input type="text" class="dvir-ms-search" placeholder="Search groups...">
+            <div class="dvir-ms-actions">
+              <label class="dvir-ms-select-all"><input type="checkbox"> Select All</label>
+              <button type="button" class="dvir-ms-clear">Clear</button>
+            </div>
+            <div class="dvir-ms-list"></div>
+          </div>
+        </div>
       </div>
 
       <div class="dvir-control-group">
-        <label for="dvir-vehicle">Vehicle</label>
-        <select id="dvir-vehicle">
-          <option value="all">All Vehicles</option>
-        </select>
+        <label>Vehicle</label>
+        <div id="dvir-vehicle" class="dvir-multi-select">
+          <button type="button" class="dvir-ms-toggle">All Vehicles</button>
+          <div class="dvir-ms-dropdown">
+            <input type="text" class="dvir-ms-search" placeholder="Search vehicles...">
+            <div class="dvir-ms-actions">
+              <label class="dvir-ms-select-all"><input type="checkbox"> Select All</label>
+              <button type="button" class="dvir-ms-clear">Clear</button>
+            </div>
+            <div class="dvir-ms-list"></div>
+          </div>
+        </div>
       </div>
 
       <div class="dvir-control-group">
@@ -184,6 +200,6 @@
     </div>
   </div>
 
-  <script src="scripts/main.js?v=3"></script>
+  <script src="scripts/main.js?v=4"></script>
 </body>
 </html>

@@ -17,6 +17,9 @@ geotab.addin.dvirDashboard = function () {
   var abortController = null;
   var firstFocus = true;
   var activeTab = "fleet";
+  var groupPicker = null;
+  var vehiclePicker = null;
+  var FLEET_ROW_LIMIT = 100;
 
   // Computed data (populated on Apply)
   var dvirData = {
@@ -154,69 +157,199 @@ geotab.addin.dvirDashboard = function () {
     });
   }
 
+  // ── Multi-Select Widget ───────────────────────────────────────────────
+
+  function closeAllDropdowns() {
+    document.querySelectorAll("#dvir-root .dvir-ms-dropdown.open").forEach(function (d) {
+      d.classList.remove("open");
+    });
+  }
+
+  function initMultiSelect(cfg) {
+    var container = $(cfg.id);
+    var toggle = container.querySelector(".dvir-ms-toggle");
+    var dropdown = container.querySelector(".dvir-ms-dropdown");
+    var searchInput = container.querySelector(".dvir-ms-search");
+    var selectAllCb = container.querySelector(".dvir-ms-select-all input");
+    var clearBtn = container.querySelector(".dvir-ms-clear");
+    var listEl = container.querySelector(".dvir-ms-list");
+
+    var items = [];
+    var selected = new Set();
+
+    function render(filter) {
+      var filt = (filter || "").toLowerCase();
+      listEl.innerHTML = "";
+      var visibleCount = 0;
+      var checkedCount = 0;
+
+      var sorted = items.filter(function (item) {
+        return !filt || item.label.toLowerCase().indexOf(filt) >= 0;
+      });
+      sorted.sort(function (a, b) {
+        var aChecked = selected.has(a.value) ? 0 : 1;
+        var bChecked = selected.has(b.value) ? 0 : 1;
+        if (aChecked !== bChecked) return aChecked - bChecked;
+        return a.label.localeCompare(b.label);
+      });
+
+      sorted.forEach(function (item) {
+        visibleCount++;
+        var checked = selected.has(item.value);
+        if (checked) checkedCount++;
+        var label = document.createElement("label");
+        label.className = "dvir-ms-item";
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = checked;
+        cb.addEventListener("change", function () {
+          if (cb.checked) selected.add(item.value);
+          else selected.delete(item.value);
+          updateToggleText();
+          updateSelectAll();
+          render(searchInput.value);
+        });
+        var span = document.createElement("span");
+        span.textContent = item.label;
+        label.appendChild(cb);
+        label.appendChild(span);
+        listEl.appendChild(label);
+      });
+      selectAllCb.checked = visibleCount > 0 && checkedCount === visibleCount;
+    }
+
+    function updateToggleText() {
+      if (selected.size === 0) {
+        toggle.textContent = cfg.placeholder || "Select...";
+      } else if (selected.size <= 2) {
+        var labels = [];
+        items.forEach(function (it) {
+          if (selected.has(it.value)) labels.push(it.label);
+        });
+        toggle.textContent = labels.join(", ");
+      } else {
+        toggle.textContent = selected.size + " selected";
+      }
+    }
+
+    function updateSelectAll() {
+      var filt = (searchInput.value || "").toLowerCase();
+      var visibleCount = 0;
+      var checkedCount = 0;
+      items.forEach(function (item) {
+        if (filt && item.label.toLowerCase().indexOf(filt) < 0) return;
+        visibleCount++;
+        if (selected.has(item.value)) checkedCount++;
+      });
+      selectAllCb.checked = visibleCount > 0 && checkedCount === visibleCount;
+    }
+
+    toggle.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var isOpen = dropdown.classList.contains("open");
+      closeAllDropdowns();
+      if (!isOpen) {
+        dropdown.classList.add("open");
+        searchInput.value = "";
+        render("");
+        searchInput.focus();
+      }
+    });
+
+    searchInput.addEventListener("input", function () {
+      render(searchInput.value);
+    });
+
+    searchInput.addEventListener("click", function (e) { e.stopPropagation(); });
+
+    selectAllCb.addEventListener("change", function () {
+      var filt = (searchInput.value || "").toLowerCase();
+      items.forEach(function (item) {
+        if (filt && item.label.toLowerCase().indexOf(filt) < 0) return;
+        if (selectAllCb.checked) selected.add(item.value);
+        else selected.delete(item.value);
+      });
+      render(searchInput.value);
+      updateToggleText();
+    });
+
+    clearBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      selected.clear();
+      selectAllCb.checked = false;
+      render(searchInput.value);
+      updateToggleText();
+    });
+
+    dropdown.addEventListener("click", function (e) { e.stopPropagation(); });
+
+    return {
+      setItems: function (newItems) {
+        items = newItems.slice().sort(function (a, b) {
+          return a.label.localeCompare(b.label);
+        });
+        selected.clear();
+        updateToggleText();
+        render("");
+      },
+      getSelected: function () {
+        return Array.from(selected);
+      },
+      hasSelection: function () {
+        return selected.size > 0;
+      },
+      container: container,
+      dropdown: dropdown
+    };
+  }
+
   // ── Dropdown Population ────────────────────────────────────────────────
 
   function populateGroupDropdown() {
-    var current = els.group.value;
-    els.group.innerHTML = '<option value="all">All Groups</option>';
-
     var skipIds = { GroupCompanyId: true, GroupNothingId: true };
-    var groupList = [];
+    var items = [];
     Object.keys(allGroups).forEach(function (gid) {
       var g = allGroups[gid];
       if (skipIds[gid]) return;
       if (!g.name || g.name === "CompanyGroup" || g.name === "**Nothing**") return;
-      groupList.push(g);
+      items.push({ value: g.id, label: g.name || g.id });
     });
-    groupList.sort(function (a, b) { return (a.name || "").localeCompare(b.name || ""); });
-
-    groupList.forEach(function (g) {
-      var opt = document.createElement("option");
-      opt.value = g.id;
-      opt.textContent = g.name || g.id;
-      els.group.appendChild(opt);
-    });
-    if (current && els.group.querySelector('option[value="' + current + '"]')) {
-      els.group.value = current;
-    }
+    groupPicker.setItems(items);
   }
 
   function populateVehicleDropdown() {
-    var current = els.vehicle.value;
-    els.vehicle.innerHTML = '<option value="all">All Vehicles</option>';
-    var sorted = allDevices.slice().sort(function (a, b) {
-      return (a.name || "").localeCompare(b.name || "");
+    var items = allDevices.map(function (d) {
+      return { value: d.id, label: d.name || d.id };
     });
-    sorted.forEach(function (d) {
-      var opt = document.createElement("option");
-      opt.value = d.id;
-      opt.textContent = d.name || d.id;
-      els.vehicle.appendChild(opt);
-    });
-    if (current && els.vehicle.querySelector('option[value="' + current + '"]')) {
-      els.vehicle.value = current;
-    }
+    vehiclePicker.setItems(items);
   }
 
   // ── Filtered Devices ───────────────────────────────────────────────────
 
   function filteredDeviceIds() {
-    var vehicleId = els.vehicle.value;
-    var groupId = els.group.value;
+    var selectedVehicles = vehiclePicker.getSelected();
+    var selectedGroups = groupPicker.getSelected();
 
-    if (vehicleId !== "all") {
+    // If specific vehicles selected, use those directly
+    if (selectedVehicles.length > 0) {
       var set = {};
-      set[vehicleId] = true;
+      selectedVehicles.forEach(function (vid) { set[vid] = true; });
       return set;
     }
 
+    // Otherwise filter by groups (empty = all)
     var set = {};
+    var groupSet = {};
+    if (selectedGroups.length > 0) {
+      selectedGroups.forEach(function (gid) { groupSet[gid] = true; });
+    }
+
     allDevices.forEach(function (dev) {
-      if (groupId !== "all") {
+      if (selectedGroups.length > 0) {
         var devGroups = dev.groups || [];
         var inGroup = false;
         for (var i = 0; i < devGroups.length; i++) {
-          if (devGroups[i].id === groupId) { inGroup = true; break; }
+          if (groupSet[devGroups[i].id]) { inGroup = true; break; }
         }
         if (!inGroup) return;
       }
@@ -525,7 +658,12 @@ geotab.addin.dvirDashboard = function () {
     }
 
     sortRows(rows, sortState.fleet);
-    renderTableBody(els.fleetBody, rows, function (r) {
+
+    // Keep full filtered set for CSV export, limit DOM rendering
+    var totalFiltered = rows.length;
+    var displayRows = rows.length > FLEET_ROW_LIMIT ? rows.slice(0, FLEET_ROW_LIMIT) : rows;
+
+    renderTableBody(els.fleetBody, displayRows, function (r) {
       var safeClass, safeText;
       if (r.safeToOperate === "yes") { safeClass = "dvir-badge-safe"; safeText = "Yes"; }
       else if (r.safeToOperate === "no") { safeClass = "dvir-badge-unsafe"; safeText = "No"; }
@@ -543,6 +681,20 @@ geotab.addin.dvirDashboard = function () {
         '<td>' + r.notNecessary + '</td>' +
         '<td>' + r.repaired + '</td>';
     });
+
+    // Show row limit indicator
+    var limitMsg = els.fleetBody.parentElement.parentElement.querySelector(".dvir-row-limit-msg");
+    if (!limitMsg) {
+      limitMsg = document.createElement("div");
+      limitMsg.className = "dvir-row-limit-msg";
+      els.fleetBody.parentElement.parentElement.appendChild(limitMsg);
+    }
+    if (totalFiltered > FLEET_ROW_LIMIT) {
+      limitMsg.textContent = "Showing " + FLEET_ROW_LIMIT + " of " + totalFiltered + " DVIRs";
+      limitMsg.style.display = "";
+    } else {
+      limitMsg.style.display = "none";
+    }
 
     if (rows.length === 0) {
       els.fleetBody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#888;padding:20px;">No DVIRs found.</td></tr>';
@@ -782,8 +934,6 @@ geotab.addin.dvirDashboard = function () {
       els.customDates = $("dvir-custom-dates");
       els.fromDate = $("dvir-from");
       els.toDate = $("dvir-to");
-      els.group = $("dvir-group");
-      els.vehicle = $("dvir-vehicle");
       els.apply = $("dvir-apply");
       els.progress = $("dvir-progress");
       els.loading = $("dvir-loading");
@@ -801,6 +951,13 @@ geotab.addin.dvirDashboard = function () {
       els.defectFilter = $("dvir-defect-filter");
       els.defectSearch = $("dvir-defect-search");
       els.defectBody = $("dvir-defect-body");
+
+      // Init multi-select widgets
+      groupPicker = initMultiSelect({ id: "dvir-group", placeholder: "All Groups" });
+      vehiclePicker = initMultiSelect({ id: "dvir-vehicle", placeholder: "All Vehicles" });
+
+      // Close dropdowns on outside click
+      document.addEventListener("click", closeAllDropdowns);
 
       // Event listeners
       els.apply.addEventListener("click", loadData);
