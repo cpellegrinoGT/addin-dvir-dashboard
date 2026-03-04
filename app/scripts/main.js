@@ -20,6 +20,7 @@ geotab.addin.dvirDashboard = function () {
   var groupPicker = null;
   var vehiclePicker = null;
   var FLEET_ROW_LIMIT = 100;
+  var fleetPage = 0;  // current page index (0-based)
 
   // Computed data (populated on Apply)
   var dvirData = {
@@ -659,9 +660,13 @@ geotab.addin.dvirDashboard = function () {
 
     sortRows(rows, sortState.fleet);
 
-    // Keep full filtered set for CSV export, limit DOM rendering
+    // Pagination
     var totalFiltered = rows.length;
-    var displayRows = rows.length > FLEET_ROW_LIMIT ? rows.slice(0, FLEET_ROW_LIMIT) : rows;
+    var totalPages = Math.max(1, Math.ceil(totalFiltered / FLEET_ROW_LIMIT));
+    if (fleetPage >= totalPages) fleetPage = totalPages - 1;
+    if (fleetPage < 0) fleetPage = 0;
+    var startIdx = fleetPage * FLEET_ROW_LIMIT;
+    var displayRows = rows.slice(startIdx, startIdx + FLEET_ROW_LIMIT);
 
     renderTableBody(els.fleetBody, displayRows, function (r) {
       var safeClass, safeText;
@@ -682,23 +687,92 @@ geotab.addin.dvirDashboard = function () {
         '<td>' + r.repaired + '</td>';
     });
 
-    // Show row limit indicator
-    var limitMsg = els.fleetBody.parentElement.parentElement.querySelector(".dvir-row-limit-msg");
-    if (!limitMsg) {
-      limitMsg = document.createElement("div");
-      limitMsg.className = "dvir-row-limit-msg";
-      els.fleetBody.parentElement.parentElement.appendChild(limitMsg);
-    }
-    if (totalFiltered > FLEET_ROW_LIMIT) {
-      limitMsg.textContent = "Showing " + FLEET_ROW_LIMIT + " of " + totalFiltered + " DVIRs";
-      limitMsg.style.display = "";
-    } else {
-      limitMsg.style.display = "none";
-    }
+    // Render pagination bar
+    renderFleetPagination(totalFiltered, totalPages);
 
     if (rows.length === 0) {
       els.fleetBody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#888;padding:20px;">No DVIRs found.</td></tr>';
     }
+  }
+
+  function renderFleetPagination(totalFiltered, totalPages) {
+    var panel = els.fleetBody.closest(".dvir-panel");
+    var bar = panel.querySelector(".dvir-pagination");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.className = "dvir-pagination";
+      panel.appendChild(bar);
+    }
+
+    if (totalPages <= 1) {
+      bar.style.display = "none";
+      return;
+    }
+    bar.style.display = "flex";
+    bar.innerHTML = "";
+
+    // Info text
+    var startRow = fleetPage * FLEET_ROW_LIMIT + 1;
+    var endRow = Math.min((fleetPage + 1) * FLEET_ROW_LIMIT, totalFiltered);
+    var info = document.createElement("span");
+    info.className = "dvir-page-info";
+    info.textContent = startRow + "–" + endRow + " of " + totalFiltered;
+    bar.appendChild(info);
+
+    // Prev button
+    var prev = document.createElement("button");
+    prev.className = "dvir-page-btn";
+    prev.textContent = "\u25C0";
+    prev.disabled = fleetPage === 0;
+    prev.addEventListener("click", function () { fleetPage--; renderFleetTable(); });
+    bar.appendChild(prev);
+
+    // Page buttons with ellipsis for large page counts
+    var pages = buildPageNumbers(fleetPage, totalPages);
+    pages.forEach(function (p) {
+      if (p === "...") {
+        var ell = document.createElement("span");
+        ell.className = "dvir-page-ellipsis";
+        ell.textContent = "...";
+        bar.appendChild(ell);
+      } else {
+        var btn = document.createElement("button");
+        btn.className = "dvir-page-btn" + (p === fleetPage ? " active" : "");
+        btn.textContent = p + 1;
+        btn.addEventListener("click", function () { fleetPage = p; renderFleetTable(); });
+        bar.appendChild(btn);
+      }
+    });
+
+    // Next button
+    var next = document.createElement("button");
+    next.className = "dvir-page-btn";
+    next.textContent = "\u25B6";
+    next.disabled = fleetPage >= totalPages - 1;
+    next.addEventListener("click", function () { fleetPage++; renderFleetTable(); });
+    bar.appendChild(next);
+  }
+
+  function buildPageNumbers(current, total) {
+    // Always show first, last, and up to 2 neighbors around current
+    if (total <= 7) {
+      var arr = [];
+      for (var i = 0; i < total; i++) arr.push(i);
+      return arr;
+    }
+    var pages = [];
+    var seen = {};
+    var targets = [0, 1, current - 1, current, current + 1, total - 2, total - 1];
+    targets.forEach(function (p) {
+      if (p >= 0 && p < total && !seen[p]) { pages.push(p); seen[p] = true; }
+    });
+    pages.sort(function (a, b) { return a - b; });
+    var result = [];
+    for (var j = 0; j < pages.length; j++) {
+      if (j > 0 && pages[j] - pages[j - 1] > 1) result.push("...");
+      result.push(pages[j]);
+    }
+    return result;
   }
 
   function renderDefectsTable() {
@@ -793,7 +867,8 @@ geotab.addin.dvirDashboard = function () {
     });
     th.classList.add("dvir-sort-" + state.dir);
 
-    // Re-render
+    // Reset page and re-render
+    if (tableId === "fleet") fleetPage = 0;
     switch (tableId) {
       case "fleet": renderFleetTable(); break;
       case "defects": renderDefectsTable(); break;
@@ -832,6 +907,7 @@ geotab.addin.dvirDashboard = function () {
   function loadData() {
     if (abortController) abortController.abort();
     abortController = new AbortController();
+    fleetPage = 0;
 
     showLoading(true, "Fetching DVIR inspections...");
     showEmpty(false);
@@ -983,10 +1059,10 @@ geotab.addin.dvirDashboard = function () {
         if (th) handleSort("defects", th);
       });
 
-      // Search / filter listeners
-      els.fleetLogType.addEventListener("change", renderFleetTable);
-      els.fleetSafe.addEventListener("change", renderFleetTable);
-      els.fleetSearch.addEventListener("input", renderFleetTable);
+      // Search / filter listeners (reset page on filter change)
+      els.fleetLogType.addEventListener("change", function () { fleetPage = 0; renderFleetTable(); });
+      els.fleetSafe.addEventListener("change", function () { fleetPage = 0; renderFleetTable(); });
+      els.fleetSearch.addEventListener("input", function () { fleetPage = 0; renderFleetTable(); });
       els.defectFilter.addEventListener("change", renderDefectsTable);
       els.defectSearch.addEventListener("input", renderDefectsTable);
 

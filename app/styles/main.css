@@ -582,13 +582,55 @@
   flex-shrink: 0;
 }
 
-/* Row limit indicator */
+/* Pagination bar */
 
-#dvir-root .dvir-row-limit-msg {
+#dvir-root .dvir-pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   padding: 8px 10px;
   font-size: 12px;
   color: #666;
+}
+
+#dvir-root .dvir-pagination .dvir-page-info {
+  margin-right: 8px;
   font-style: italic;
+}
+
+#dvir-root .dvir-page-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+#dvir-root .dvir-page-btn:hover {
+  background: #e8ecf0;
+  border-color: #bbb;
+}
+
+#dvir-root .dvir-page-btn.active {
+  background: #4a90d9;
+  color: #fff;
+  border-color: #4a90d9;
+  font-weight: 600;
+}
+
+#dvir-root .dvir-page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+#dvir-root .dvir-page-ellipsis {
+  padding: 0 4px;
+  color: #999;
 }
 
 /* Warning banner */
